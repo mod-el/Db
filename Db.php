@@ -533,17 +533,15 @@ class Db extends Module{
 		$sel_str = ''; $join_str = '';
 		if($multilang and $options['auto_ml'] and array_key_exists($table, $multilang->tables)){
 			$ml = $multilang->tables[$table];
-			if($options['field']===false or in_array($options['field'], $ml['fields'])){ // Se è stato specificato un singolo campo che non è fra i multilingua, allora sarebbe inutile fare il join
-				foreach($ml['fields'] as $nf => $f)
-					$ml['fields'][$nf] = 'lang.'.$f;
-				if($ml['fields'])
-					$sel_str .= ','.implode(',', $ml['fields']);
+			foreach($ml['fields'] as $nf => $f)
+				$ml['fields'][$nf] = 'lang.'.$f;
+			if($ml['fields'])
+				$sel_str .= ','.implode(',', $ml['fields']);
 
-				if($multilang->options['fallback']){
-					$join_str .= ' LEFT OUTER JOIN `'.$table.$ml['suffisso'].'` AS lang ON lang.`'.$this->makeSafe($ml['keyfield']).'` = t.`id` AND lang.`'.$this->makeSafe($ml['lang']).'` LIKE (CASE WHEN '.$this->db->quote($options['lang']).' IN (SELECT `'.$this->makeSafe($ml['lang']).'` FROM `'.$table.$ml['suffisso'].'` WHERE `'.$this->makeSafe($ml['keyfield']).'` = t.`id`) THEN '.$this->db->quote($options['lang']).' ELSE '.$this->db->quote($multilang->options['fallback']).' END)';
-				}else{
-					$join_str .= ' LEFT OUTER JOIN `'.$table.$ml['suffisso'].'` AS lang ON lang.`'.$this->makeSafe($ml['keyfield']).'` = t.`id` AND lang.`'.$this->makeSafe($ml['lang']).'` LIKE '.$this->db->quote($options['lang']);
-				}
+			if($multilang->options['fallback']){
+				$join_str .= ' LEFT OUTER JOIN `'.$table.$ml['suffisso'].'` AS lang ON lang.`'.$this->makeSafe($ml['keyfield']).'` = t.`id` AND lang.`'.$this->makeSafe($ml['lang']).'` LIKE (CASE WHEN '.$this->db->quote($options['lang']).' IN (SELECT `'.$this->makeSafe($ml['lang']).'` FROM `'.$table.$ml['suffisso'].'` WHERE `'.$this->makeSafe($ml['keyfield']).'` = t.`id`) THEN '.$this->db->quote($options['lang']).' ELSE '.$this->db->quote($multilang->options['fallback']).' END)';
+			}else{
+				$join_str .= ' LEFT OUTER JOIN `'.$table.$ml['suffisso'].'` AS lang ON lang.`'.$this->makeSafe($ml['keyfield']).'` = t.`id` AND lang.`'.$this->makeSafe($ml['lang']).'` LIKE '.$this->db->quote($options['lang']);
 			}
 		}
 
