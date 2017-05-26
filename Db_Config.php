@@ -183,9 +183,11 @@ $foreign_keys = '.var_export($foreign_keys, true).';
 			];
 		}
 
-		$configFile = INCLUDE_PATH.'data'.DIRECTORY_SEPARATOR.'config'.DIRECTORY_SEPARATOR.'Db'.DIRECTORY_SEPARATOR.'config.php';
+		$configFileDir = INCLUDE_PATH.'data'.DIRECTORY_SEPARATOR.'config'.DIRECTORY_SEPARATOR.'Db';
+		if(!is_dir($configFileDir))
+			mkdir($configFileDir, 0777, true);
 
-		$w = file_put_contents($configFile, '<?php
+		$w = file_put_contents($configFileDir.DIRECTORY_SEPARATOR.'config.php', '<?php
 $config = '.var_export($config, true).';
 ');
 		return (bool) $w;
