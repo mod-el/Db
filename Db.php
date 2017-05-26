@@ -539,9 +539,9 @@ class Db extends Module{
 				$sel_str .= ','.implode(',', $ml['fields']);
 
 			if($multilang->options['fallback']){
-				$join_str .= ' LEFT OUTER JOIN `'.$table.$ml['suffisso'].'` AS lang ON lang.`'.$this->makeSafe($ml['keyfield']).'` = t.`id` AND lang.`'.$this->makeSafe($ml['lang']).'` LIKE (CASE WHEN '.$this->db->quote($options['lang']).' IN (SELECT `'.$this->makeSafe($ml['lang']).'` FROM `'.$table.$ml['suffisso'].'` WHERE `'.$this->makeSafe($ml['keyfield']).'` = t.`id`) THEN '.$this->db->quote($options['lang']).' ELSE '.$this->db->quote($multilang->options['fallback']).' END)';
+				$join_str .= ' LEFT OUTER JOIN `'.$table.$ml['suffix'].'` AS lang ON lang.`'.$this->makeSafe($ml['keyfield']).'` = t.`id` AND lang.`'.$this->makeSafe($ml['lang']).'` LIKE (CASE WHEN '.$this->db->quote($options['lang']).' IN (SELECT `'.$this->makeSafe($ml['lang']).'` FROM `'.$table.$ml['suffix'].'` WHERE `'.$this->makeSafe($ml['keyfield']).'` = t.`id`) THEN '.$this->db->quote($options['lang']).' ELSE '.$this->db->quote($multilang->options['fallback']).' END)';
 			}else{
-				$join_str .= ' LEFT OUTER JOIN `'.$table.$ml['suffisso'].'` AS lang ON lang.`'.$this->makeSafe($ml['keyfield']).'` = t.`id` AND lang.`'.$this->makeSafe($ml['lang']).'` LIKE '.$this->db->quote($options['lang']);
+				$join_str .= ' LEFT OUTER JOIN `'.$table.$ml['suffix'].'` AS lang ON lang.`'.$this->makeSafe($ml['keyfield']).'` = t.`id` AND lang.`'.$this->makeSafe($ml['lang']).'` LIKE '.$this->db->quote($options['lang']);
 			}
 		}
 
@@ -707,7 +707,7 @@ class Db extends Module{
 
 		if($multilang and $options['auto_ml'] and array_key_exists($table, $multilang->tables)){
 			$ml = $multilang->tables[$table];
-			$join_str .= ' LEFT OUTER JOIN `'.$table.$ml['suffisso'].'` lang ON lang.`'.$this->makeSafe($ml['keyfield']).'` = t.id AND lang.`'.$this->makeSafe($ml['lang']).'` LIKE '.$this->db->quote($options['lang']);
+			$join_str .= ' LEFT OUTER JOIN `'.$table.$ml['suffix'].'` lang ON lang.`'.$this->makeSafe($ml['keyfield']).'` = t.id AND lang.`'.$this->makeSafe($ml['lang']).'` LIKE '.$this->db->quote($options['lang']);
 		}
 
 		$joins = $this->elaborateJoins($table, $options['joins']);
