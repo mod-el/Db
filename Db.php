@@ -1132,6 +1132,8 @@ class Db extends Module{
 
 		$str = array();
 		foreach($array as $k => $v){
+			$alreadyParsed = false;
+
 			if(is_array($v)){
 				if(!is_numeric($k) and (strtoupper($k)==='OR' or strtoupper($k)==='AND')){
 					$sub_str = $this->makeSqlString($table, $v, $k, $options);
@@ -1154,6 +1156,14 @@ class Db extends Module{
 								$operator = '=';
 							}else{
 								$operator = $v[0];
+
+								if(strtoupper($operator)==='IN'){
+									if(!is_array($v[1]))
+										$this->model->error('Expected array after a "in" clause');
+
+									$alreadyParsed = true;
+									$v[1] = implode(',', array_map(function($el){ return $this->elaborateValue($el); }, $v[1]));
+								}
 							}
 							$v1 = $v[1];
 							break;
@@ -1189,14 +1199,16 @@ class Db extends Module{
 
 			$k = $this->elaborateField($table, $k, $options);
 
-			if($v1===null){
-				$v1 = 'NULL';
-				if($options['for_where']){
-					if($operator=='=') $operator = 'IS';
-					elseif($operator=='!=') $operator = 'IS NOT';
+			if(!$alreadyParsed){
+				if($v1===null){
+					$v1 = 'NULL';
+					if($options['for_where']){
+						if($operator=='=') $operator = 'IS';
+						elseif($operator=='!=') $operator = 'IS NOT';
+					}
+				}else{
+					$v1 = $this->elaborateValue($v1);
 				}
-			}else{
-				$v1 = $this->elaborateValue($v1);
 			}
 
 			if($operator=='BETWEEN'){
