@@ -343,12 +343,12 @@ class Db extends Module{
 			$prev_versions = $this->model->select_all($table, $where, ['stream'=>true]);
 			foreach($prev_versions as $r){
 				if($r['zkversion']>$data['zkversion'])
-					$this->model->error('Da quando questo elemento è stato aperto, ne è stata salvata una versione più recente.', ['code'=>'zkversion-mismatch']);
+					$this->model->error('A new version of this element has been saved.', ['code'=>'zkversion-mismatch']);
 			}
 			$data['zkversion']++;
 		}
 
-		if(array_keys($data)==array('zkversion')) // C'è solo l'indicatore di versione, lo considero un array vuoto come poco sotto, perché non sta salvando nessun dato utile
+		if(array_keys($data)==array('zkversion')) // Only version number? There is no useful data then
 			return true;
 		if($data===array())
 			return true;
