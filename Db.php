@@ -340,7 +340,7 @@ class Db extends Module{
 			return $check;
 
 		if($this->tables[$table]!==false and isset($this->tables[$table]->columns['zkversion'], $data['zkversion'])){
-			$prev_versions = $this->model->select_all($table, $where, ['raw'=>true]);
+			$prev_versions = $this->model->select_all($table, $where, ['stream'=>true]);
 			foreach($prev_versions as $r){
 				if($r['zkversion']>$data['zkversion'])
 					$this->model->error('Da quando questo elemento è stato aperto, ne è stata salvata una versione più recente.', ['code'=>'zkversion-mismatch']);
@@ -509,7 +509,7 @@ class Db extends Module{
 			'sum'=>false,
 			'debug_query'=>false,
 			'return_query'=>false,
-			'raw'=>false
+			'stream'=>false
 		), $opt);
 		if($options['multiple']===false and $options['limit']===false)
 			$options['limit'] = 1;
@@ -637,14 +637,14 @@ class Db extends Module{
 			$return = $this->normalizeTypesInSelect($table, $return);
 			$return = $return[$options['field']];
 		}elseif($options['multiple']){
-			if($options['raw'])
+			if($options['stream'])
 				return $q;
 
 			$return = $q->fetchAll();
 			foreach($return as $k=>$riga)
 				$return[$k] = $this->normalizeTypesInSelect($table, $riga);
 		}else{
-			if($options['raw'])
+			if($options['stream'])
 				return $q;
 
 			$return = $this->normalizeTypesInSelect($table, $q->fetch());
