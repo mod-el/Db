@@ -1143,9 +1143,6 @@ class Db extends Module{
 					if(!empty($sub_str))
 						$str[] = '('.$sub_str.')';
 					continue;
-				}elseif(array_key_exists('full', $v)){
-					$str[] = '('.$v['full'].')';
-					continue;
 				}else{
 					$n_elementi = count($v);
 					if($n_elementi<2 or $n_elementi>4 or count(array_filter(array_keys($v), 'is_numeric'))<$n_elementi) continue;
