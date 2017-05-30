@@ -70,9 +70,7 @@ class Db extends Module{
 		$this->methods = array(
 			'query',
 			'insert',
-			'safeInsert',
 			'update',
-			'safeUpdate',
 			'updateOrInsert',
 			'delete',
 			'read',
@@ -244,6 +242,7 @@ class Db extends Module{
 		]);
 
 		$this->loadTable($table);
+		$data = $this->filterColumns($table, $data);
 		$this->checkDbData($table, $data, $options);
 
 		try{
@@ -293,22 +292,6 @@ class Db extends Module{
 	}
 
 	/**
-	 * @param stirng $table
-	 * @param array|bool $data
-	 * @param array $options
-	 * @return int
-	 */
-	public function safeInsert($table, $data=false, $options=array()){
-		if(!is_array($data)){
-			$this->model->error('Error while inserting.', '<b>Error:</b> No data array was given!');
-		}
-
-		$this->loadTable($table);
-		$data = $this->filterColumns($table, $data);
-		return $this->insert($table, $data, $options);
-	}
-
-	/**
 	 * @param string $table
 	 * @param array $where
 	 * @param array|bool $data
@@ -335,6 +318,7 @@ class Db extends Module{
 		]);
 
 		$this->loadTable($table);
+		$data = $this->filterColumns($table, $data);
 		$check = $this->checkDbData($table, $data, $options);
 		if(isErr($check))
 			return $check;
@@ -371,23 +355,6 @@ class Db extends Module{
 			$this->model->error('Error while updating.', '<b>Error:</b> '.getErr($e).'<br /><b>Query:</b> '.$qry);
 		}
 		return true;
-	}
-
-	/**
-	 * @param string $table
-	 * @param array $where
-	 * @param array|bool $data
-	 * @param array $options
-	 * @return bool
-	 */
-	public function safeUpdate($table, $where, $data=false, $options=array()){
-		if(!is_array($data)){
-			$this->model->error('Error while updating.', '<b>Error:</b> No data array was given!');
-		}
-
-		$this->loadTable($table);
-		$data = $this->filterColumns($table, $data);
-		return $this->update($table, $where, $data, $options);
 	}
 
 	/**
