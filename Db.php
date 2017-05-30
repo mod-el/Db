@@ -796,8 +796,6 @@ class Db extends Module{
 				$join['table'] = $k;
 			if(!isset($join['where']))
 				$join['where'] = array();
-			if(isset($join['main_field'])) // Retrocompatibilità
-				$join['on'] = $join['main_field'];
 
 			$tableModel = $this->getTable($table);
 			if(!isset($join['on'], $join['join_field']) and !isset($join['full_on'])){
