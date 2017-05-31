@@ -35,6 +35,7 @@ class Db extends Module{
 		'direct-pdo'=>false,
 		'query-limit'=>100,
 		'query-limit-table'=>10000,
+		'debug'=>false,
 	);
 
 	/** @var array  */
@@ -232,7 +233,7 @@ class Db extends Module{
 
 		$options = array_merge(array(
 			'replace'=>false,
-			'debug_query'=>false,
+			'debug'=>$this->options['debug'],
 		), $options);
 
 		$this->trigger('insert', [
@@ -273,7 +274,7 @@ class Db extends Module{
 				$qry = $qry_init.' INTO `'.$this->makeSafe($table).'`('.implode(',', $keys).') VALUES('.implode(',', $values).')';
 			}
 
-			if($options['debug_query'] and DEBUG_MODE)
+			if($options['debug'] and DEBUG_MODE)
 				echo '<b>QUERY DEBUG:</b> '.$qry.'<br />';
 
 			$id = $this->query($qry, $table, 'INSERT', $options);
@@ -307,7 +308,7 @@ class Db extends Module{
 
 		$options = array_merge(array(
 			'confirm'=>false,
-			'debug_query'=>false,
+			'debug'=>$this->options['debug'],
 		), $options);
 
 		$this->trigger('update', [
@@ -344,7 +345,7 @@ class Db extends Module{
 
 		$qry = 'UPDATE `'.$this->makeSafe($table).'` SET '.$this->makeSqlString($table, $data, ',', array('for_where'=>false)).$where_str;
 
-		if($options['debug_query'] and DEBUG_MODE)
+		if($options['debug'] and DEBUG_MODE)
 			echo '<b>QUERY DEBUG:</b> '.$qry.'<br />';
 
 		try{
@@ -390,7 +391,7 @@ class Db extends Module{
 		}
 		$options = array_merge(array(
 			'confirm'=>false,
-			'debug_query'=>false,
+			'debug'=>$this->options['debug'],
 		), $options);
 
 		$this->trigger('delete', [
@@ -409,7 +410,7 @@ class Db extends Module{
 		if(in_array($table, $this->options['autoHide'])) $qry = 'UPDATE '.$this->makeSafe($table).' SET zk_deleted = 1'.$where_str;
 		else $qry = 'DELETE FROM `'.$this->makeSafe($table).'`'.$where_str;
 
-		if($options['debug_query'] and DEBUG_MODE)
+		if($options['debug'] and DEBUG_MODE)
 			echo '<b>QUERY DEBUG:</b> '.$qry.'<br />';
 
 		try{
@@ -474,7 +475,7 @@ class Db extends Module{
 			'field'=>false,
 			'max'=>false,
 			'sum'=>false,
-			'debug_query'=>false,
+			'debug'=>$this->options['debug'],
 			'return_query'=>false,
 			'stream'=>false
 		), $opt);
@@ -577,7 +578,7 @@ class Db extends Module{
 		if($options['return_query'])
 			return $qry;
 
-		if($options['debug_query'] and DEBUG_MODE)
+		if($options['debug'] and DEBUG_MODE)
 			echo '<b>QUERY DEBUG:</b> '.$qry.'<br />';
 
 		$cacheKey = md5($qry.((string) $options['field']).((string) $options['max']).((string) $options['sum']).((int) $options['multiple']));
@@ -651,7 +652,7 @@ class Db extends Module{
 			'auto_ml'=>$auto_ml,
 			'lang'=>$lang,
 			'field'=>false,
-			'debug_query'=>false,
+			'debug'=>$this->options['debug'],
 			'return_query'=>false,
 		);
 		$options = array_merge($options, $opt);
@@ -715,7 +716,7 @@ class Db extends Module{
 		if($options['return_query'])
 			return $qry;
 
-		if($options['debug_query'] and DEBUG_MODE)
+		if($options['debug'] and DEBUG_MODE)
 			echo '<b>QUERY DEBUG:</b> '.$qry.'<br />';
 
 		$cacheKey = md5($qry);
