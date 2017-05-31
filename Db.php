@@ -762,10 +762,13 @@ class Db extends Module{
 			return $riga;
 
 		foreach($riga as $k=>$v){
-			if($v===null or $v===false) continue;
+			if($v===null or $v===false)
+				continue;
 			if(array_key_exists($k, $this->tables[$table]->columns)){
-				if($this->tables[$table]->columns[$k]['type']=='decimal')
+				if(in_array($this->tables[$table]->columns[$k]['type'], ['double', 'float', 'decimal']))
 					$riga[$k] = (float) $v;
+				if(in_array($this->tables[$table]->columns[$k]['type'], ['tinyint', 'smallint', 'mediumint', 'int', 'bigint', 'year']))
+					$riga[$k] = (int) $v;
 			}
 		}
 		return $riga;
