@@ -1127,7 +1127,7 @@ class Db extends Module{
 										$this->model->error('Expected array after a "in" clause');
 
 									$alreadyParsed = true;
-									$v[1] = implode(',', array_map(function($el){ return $this->elaborateValue($el); }, $v[1]));
+									$v[1] = '('.implode(',', array_map(function($el){ return $this->elaborateValue($el); }, $v[1])).')';
 								}
 							}
 							$v1 = $v[1];
