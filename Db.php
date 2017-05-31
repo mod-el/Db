@@ -738,7 +738,7 @@ class Db extends Module{
 			$this->model->error('Errore durante la lettura dei dati.', '<b>Errore:</b> '.$e->getMessage().'<br /><b>Query:</b> '.$qry);
 		}
 
-		$return = $q->fetchColumn();
+		$return = (int) $q->fetchColumn();
 
 		$this->queryCache[$table][$cacheKey] = [
 			'query'=>$qry,
