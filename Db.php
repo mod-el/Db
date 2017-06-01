@@ -539,11 +539,11 @@ class Db extends Module{
 			if(isset($join['full_on'])){
 				$join_str .= ' '.$join['type'].' JOIN `'.$this->makeSafe($join['table']).'` j'.$cj.' ON '.$join['full_on'];
 			}else{
-				$join_where = array_merge(array(
-					array('full'=>'j'.$cj.'.`'.$this->makeSafe($join['join_field']).'` = t.`'.$this->makeSafe($join['on']).'`'),
-				), $join['where']);
+				$join_where = array_merge([
+					'j'.$cj.'.`'.$this->makeSafe($join['join_field']).'` = t.`'.$this->makeSafe($join['on']).'`',
+				], $join['where']);
 
-				$join_str .= ' '.$join['type'].' JOIN `'.$this->makeSafe($join['table']).'` j'.$cj.' ON ('.$this->makeSqlString($table, $join_where, 'AND', array('joins'=>$joins)).')';
+				$join_str .= ' '.$join['type'].' JOIN `'.$this->makeSafe($join['table']).'` j'.$cj.' ON ('.$this->makeSqlString($table, $join_where, 'AND', ['joins'=>$joins]).')';
 			}
 
 			$cj++;
@@ -687,11 +687,11 @@ class Db extends Module{
 			if(isset($join['full_on'])){
 				$join_str .= ' '.$join['type'].' JOIN `'.$this->makeSafe($join['table']).'` j'.$cj.' ON '.$join['full_on'];
 			}else {
-				$join_where = array_merge(array(
-					array('full'=>'j'.$cj.'.`'.$this->makeSafe($join['join_field']).'` = t.`'.$this->makeSafe($join['on']).'`'),
-				), $join['where']);
+				$join_where = array_merge([
+					'j'.$cj.'.`'.$this->makeSafe($join['join_field']).'` = t.`'.$this->makeSafe($join['on']).'`',
+				], $join['where']);
 
-				$join_str .= ' '.$join['type'].' JOIN `'.$this->makeSafe($join['table']).'` j'.$cj.' ON ('.$this->makeSqlString($table, $join_where, 'AND', array('joins'=>$joins)).')';
+				$join_str .= ' '.$join['type'].' JOIN `'.$this->makeSafe($join['table']).'` j'.$cj.' ON ('.$this->makeSqlString($table, $join_where, 'AND', ['joins'=>$joins]).')';
 			}
 			$cj++;
 		}
