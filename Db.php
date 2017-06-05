@@ -60,7 +60,12 @@ class Db extends Module{
 
 				$this->options = array_merge($config['databases'][$this->options['db']], $this->options);
 
-				$this->db = new \PDO('mysql:host='.$this->options['host'].';dbname='.$this->options['database'].';charset=utf8', $this->options['username'], $this->options['password'], array(\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION, \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC));
+				$this->db = new \PDO('mysql:host='.$this->options['host'].';dbname='.$this->options['database'].';charset=utf8', $this->options['username'], $this->options['password'], [
+					\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+					\PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
+					\PDO::ATTR_EMULATE_PREPARES => false,
+					\PDO::ATTR_STRINGIFY_FETCHES => false,
+				]);
 				$this->name = $this->options['database'];
 				$this->unique_id = preg_replace('/[^A-Za-z0-9._-]/', '', $this->options['host'].'-'.$this->options['database']);
 			}
