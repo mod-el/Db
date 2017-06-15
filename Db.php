@@ -1081,7 +1081,7 @@ class Db extends Module{
 	private function elaborateValue($v){
 		if(is_object($v)){
 			if(get_class($v)=='DateTime') $v = $v->format('Y-m-d H:i:s');
-			else throw $this->model->error('Errore Core: Errore nella tipologia di dato.', 'Tipo di oggetto non riconosciuto.');
+			else $this->model->error('Errore Core: Errore nella tipologia di dato.', 'Tipo di oggetto non riconosciuto.');
 		}
 
 		return $this->db->quote($v);
