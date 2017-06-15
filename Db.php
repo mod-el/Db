@@ -38,6 +38,7 @@ class Db extends Module{
 		'debug'=>false,
 		'use_buffered_query'=>false,
 		'emulate_prepares'=>false,
+		'local_infile'=>true,
 	);
 
 	/** @var array  */
@@ -68,6 +69,7 @@ class Db extends Module{
 					\PDO::ATTR_EMULATE_PREPARES => $this->options['emulate_prepares'],
 					\PDO::ATTR_STRINGIFY_FETCHES => false,
 					\PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => $this->options['use_buffered_query'],
+					\PDO::MYSQL_ATTR_LOCAL_INFILE => $this->options['local_infile'],
 				]);
 				$this->name = $this->options['database'];
 				$this->unique_id = preg_replace('/[^A-Za-z0-9._-]/', '', $this->options['host'].'-'.$this->options['database']);
