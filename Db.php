@@ -65,6 +65,7 @@ class Db extends Module{
 					\PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
 					\PDO::ATTR_EMULATE_PREPARES => false,
 					\PDO::ATTR_STRINGIFY_FETCHES => false,
+					\PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true,
 				]);
 				$this->name = $this->options['database'];
 				$this->unique_id = preg_replace('/[^A-Za-z0-9._-]/', '', $this->options['host'].'-'.$this->options['database']);
