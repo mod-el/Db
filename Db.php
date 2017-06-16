@@ -335,7 +335,7 @@ class Db extends Module{
 			return $check;
 
 		if($this->tables[$table]!==false and isset($this->tables[$table]->columns['zkversion'], $data['zkversion'])){
-			$prev_versions = $this->model->select_all($table, $where, ['stream'=>true]);
+			$prev_versions = $this->select_all($table, $where, ['stream'=>true]);
 			foreach($prev_versions as $r){
 				if($r['zkversion']>$data['zkversion'])
 					$this->model->error('A new version of this element has been saved.', ['code'=>'zkversion-mismatch']);
