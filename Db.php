@@ -36,7 +36,7 @@ class Db extends Module{
 		'query-limit'=>100,
 		'query-limit-table'=>10000,
 		'debug'=>false,
-		'use_buffered_query'=>false,
+		'use_buffered_query'=>true,
 		'emulate_prepares'=>false,
 		'local_infile'=>true,
 	);
