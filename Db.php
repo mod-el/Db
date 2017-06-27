@@ -49,7 +49,7 @@ class Db extends Module{
 	/**
 	 * @param array $options
 	 */
-	public function init(array $options){
+	public function init($options){
 		$this->options = array_merge($this->options, $options);
 
 		try{
