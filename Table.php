@@ -15,7 +15,7 @@ class Table{
 	 * @param array $columns
 	 * @param array $foreign_keys
 	 */
-	function __construct($columns, $foreign_keys=array()){
+	function __construct(array $columns, array $foreign_keys=array()){
 		foreach($columns as $k=>$c){
 			if($c['key']=='PRI')
 				$this->primary = $k;
@@ -33,7 +33,7 @@ class Table{
 	 * @param array $options
 	 * @return bool
 	 */
-	public function checkType($k, $v, $options){
+	public function checkType($k, $v, array $options){
 		if(!array_key_exists($k, $this->columns))
 			return false;
 

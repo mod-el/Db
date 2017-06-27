@@ -49,7 +49,7 @@ class Db extends Module{
 	/**
 	 * @param array $options
 	 */
-	public function init($options){
+	public function init(array $options){
 		$this->options = array_merge($this->options, $options);
 
 		try{
@@ -97,7 +97,7 @@ class Db extends Module{
 	 * @param array $arguments
 	 * @return mixed
 	 */
-	function __call($name, $arguments){
+	function __call($name, array $arguments){
 		if(method_exists($this->db, $name)){
 			return call_user_func_array(array($this->db, $name), $arguments);
 		}
@@ -111,7 +111,7 @@ class Db extends Module{
 	 * @param array $options
 	 * @return \PDOStatement|int
 	 */
-	public function query($qry, $table=false, $type=false, $options=[]){
+	public function query($qry, $table=false, $type=false, array $options=[]){
 		$options = array_merge([
 			'log' => true,
 			'query-limit' => true,
@@ -171,7 +171,7 @@ class Db extends Module{
 	 * @param array $options
 	 * @return \PDOStatement
 	 */
-	public function prepare($qry, $options=array()){
+	public function prepare($qry, array $options=array()){
 		$this->n_prepared++;
 		return $this->db->prepare($qry, $options);
 	}
@@ -236,7 +236,7 @@ class Db extends Module{
 	 * @param array $options
 	 * @return int
 	 */
-	public function insert($table, $data=false, $options=array()){
+	public function insert($table, $data=false, array $options=array()){
 		if(!is_array($data)){
 			$this->model->error('Error while inserting.', '<b>Error:</b> No data array was given!');
 		}
@@ -304,12 +304,12 @@ class Db extends Module{
 
 	/**
 	 * @param string $table
-	 * @param array $where
+	 * @param array|int $where
 	 * @param array|bool $data
 	 * @param array $options
 	 * @return bool
 	 */
-	public function update($table, $where, $data=false, $options=array()){
+	public function update($table, $where, $data=false, array $options=array()){
 		if(!is_array($data)){
 			$this->model->error('Error while updating.', '<b>Error:</b> No data array was given!');
 		}
@@ -370,12 +370,12 @@ class Db extends Module{
 
 	/**
 	 * @param string $table
-	 * @param array $where
+	 * @param array|int $where
 	 * @param array|bool $data
 	 * @param array $options
 	 * @return bool|int
 	 */
-	public function updateOrInsert($table, $where, $data=false, $options=array()){
+	public function updateOrInsert($table, $where, $data=false, array $options=array()){
 		if(!is_array($data)){
 			$this->model->error('Error while updating.', '<b>Error:</b> No data array was given!');
 		}
@@ -391,11 +391,11 @@ class Db extends Module{
 
 	/**
 	 * @param string $table
-	 * @param array $where
+	 * @param array|int $where
 	 * @param array $options
 	 * @return bool
 	 */
-	public function delete($table, $where=array(), $options=array()){
+	public function delete($table, $where=array(), array $options=array()){
 		if(!is_array($where) and is_numeric($where)){
 			$where = array('id'=>$where);
 		}
@@ -445,22 +445,22 @@ class Db extends Module{
 
 	/**
 	 * @param string $table
-	 * @param array $where
+	 * @param array|int $where
 	 * @param array $opt
 	 * @return mixed
 	 */
-	public function select_all($table, $where=array(), $opt=array()){
+	public function select_all($table, $where=array(), array $opt=array()){
 		$opt['multiple'] = true;
 		return $this->select($table, $where, $opt);
 	}
 
 	/**
 	 * @param string $table
-	 * @param array $where
+	 * @param array|int $where
 	 * @param array $opt
 	 * @return mixed
 	 */
-	public function select($table, $where=array(), $opt=array()){
+	public function select($table, $where=array(), array $opt=array()){
 		if($where===false or $where===null)
 			return false;
 		if(!is_array($where) and is_numeric($where))
@@ -638,11 +638,11 @@ class Db extends Module{
 
 	/**
 	 * @param string $table
-	 * @param array $where
+	 * @param array|int $where
 	 * @param array $opt
 	 * @return int
 	 */
-	public function count($table, $where=array(), $opt=array()){
+	public function count($table, $where=array(), array $opt=array()){
 		if($where===false or $where===null)
 			return false;
 		if(!is_array($where) and is_numeric($where))
@@ -789,7 +789,7 @@ class Db extends Module{
 	 * @param array $joins
 	 * @return array
 	 */
-	private function elaborateJoins($table, $joins){
+	private function elaborateJoins($table, array $joins){
 		/*
 		Formati possibili per un join:
 
@@ -881,7 +881,7 @@ class Db extends Module{
 	 * @param array $options
 	 * @return bool
 	 */
-	private function checkDbData($table, $data, $options=array()){
+	private function checkDbData($table, array $data, array $options=array()){
 		$options = array_merge(array('check'=>true, 'checkTypes'=>true, 'checkLengths'=>false), $options);
 		if($options['check']===false or $this->tables[$table]===false) // Se è stata disabilitata la verifica dalle opzioni, oppure non esiste file di configurazione per questa tabella, salto la verifica
 			return true;
@@ -906,9 +906,9 @@ class Db extends Module{
 	 * @param array $opt
 	 * @return bool
 	 */
-	private function canUseCache($table, $where=array(), $opt=array()){
-		if(!in_array($table, $this->options['listCache'])) return false;
-		if(!is_array($where)) return false;
+	private function canUseCache($table, array $where=array(), array $opt=array()){
+		if(!in_array($table, $this->options['listCache']))
+			return false;
 		foreach($where as $k=>$v){
 			if(is_numeric($k) and is_string($v))
 				return false;
@@ -940,7 +940,7 @@ class Db extends Module{
 	 * @param array $opt
 	 * @return array|bool
 	 */
-	private function select_cache($table, $where=array(), $opt=array()){
+	private function select_cache($table, array $where=array(), array $opt=array()){
 		if(!isset($this->n_tables[$table.'-cache']))
 			$this->n_tables[$table.'-cache'] = 1;
 		else
@@ -1033,7 +1033,7 @@ class Db extends Module{
 	 * @param array $opt
 	 * @return string
 	 */
-	private function elaborateField($table, $k, $opt=array()){
+	private function elaborateField($table, $k, array $opt=array()){
 		$options = array_merge(array('auto_ml'=>false, 'main_alias'=>false, 'joins'=>array()), $opt);
 		$kr = '`'.$this->makeSafe($k).'`';
 
@@ -1101,7 +1101,7 @@ class Db extends Module{
 	 * @param array $opt
 	 * @return string
 	 */
-	public function makeSqlString($table, $array, $collante, $opt=array()){
+	public function makeSqlString($table, $array, $collante, array $opt=array()){
 		if(is_string($array)){
 			return $array;
 		}
@@ -1246,7 +1246,7 @@ class Db extends Module{
 	 * @param array $data
 	 * @return array
 	 */
-	private function filterColumns($table, $data){
+	private function filterColumns($table, array $data){
 		if($this->tables[$table]===false)
 			return $data;
 

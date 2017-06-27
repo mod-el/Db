@@ -137,7 +137,7 @@ $foreign_keys = '.var_export($foreign_keys, true).';
 	 * @param array $request
 	 * @return string
 	 */
-	public function getTemplate($request){
+	public function getTemplate(array $request){
 		return INCLUDE_PATH.'model'.DIRECTORY_SEPARATOR.'Db'.DIRECTORY_SEPARATOR.'templates'.DIRECTORY_SEPARATOR.'config';
 	}
 
@@ -148,7 +148,7 @@ $foreign_keys = '.var_export($foreign_keys, true).';
 	 * @param array $data
 	 * @return bool
 	 */
-	public function saveConfig($type, $data){
+	public function saveConfig($type, array $data){
 		$config = $this->retrieveConfig();
 
 		if(isset($config['databases'])){
@@ -199,7 +199,7 @@ $config = '.var_export($config, true).';
 	 * @param array $data
 	 * @return bool
 	 */
-	public function install($data=[]){
+	public function install(array $data=[]){
 		if(!$this->saveConfig('install', $data))
 			return false;
 
