@@ -330,9 +330,7 @@ class Db extends Module{
 
 		$this->loadTable($table);
 		$data = $this->filterColumns($table, $data);
-		$check = $this->checkDbData($table, $data, $options);
-		if(isErr($check))
-			return $check;
+		$this->checkDbData($table, $data, $options);
 
 		if($this->tables[$table]!==false and isset($this->tables[$table]->columns['zkversion'], $data['zkversion'])){
 			$prev_versions = $this->select_all($table, $where, ['stream'=>true]);
