@@ -61,7 +61,10 @@ class Db extends Module{
 				if(!$config or !isset($config['databases'][$this->options['db']]))
 					throw new \Exception('Missing database configuration for '.$options['db'].' database!');
 
-				$this->options = array_merge($config['databases'][$this->options['db']], $this->options);
+				$configOptions = $config['databases'][$this->options['db']];
+				$this->options['listCache'] = array_unique(array_merge($configOptions['listCache'], $this->options['listCache']));
+				$this->options['autoHide'] = array_unique(array_merge($configOptions['autoHide'], $this->options['autoHide']));
+				$this->options = array_merge($configOptions, $this->options);
 
 				$this->db = new \PDO('mysql:host='.$this->options['host'].';dbname='.$this->options['database'].';charset=utf8', $this->options['username'], $this->options['password'], [
 					\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
