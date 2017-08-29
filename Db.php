@@ -460,10 +460,10 @@ class Db extends Module{
 	/**
 	 * @param string $table
 	 * @param array|int $where
-	 * @param array $opt
+	 * @param array|string $opt
 	 * @return mixed
 	 */
-	public function select($table, $where=array(), array $opt=array()){
+	public function select($table, $where=array(), $opt=array()){
 		if($where===false or $where===null)
 			return false;
 		if(!is_array($where) and is_numeric($where))
