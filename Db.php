@@ -476,22 +476,22 @@ class Db extends Module{
 		$lang = $multilang ? $multilang->lang : 'it';
 
 		$options = array_merge([
-			'multiple'=>false,
-			'operator'=>'AND',
-			'distinct'=>false,
-			'limit'=>false,
-			'order_by'=>false,
-			'group_by'=>false,
-			'auto_ml'=>$auto_ml,
-			'lang'=>$lang,
-			'joins'=> [],
-			'field'=>false,
-			'max'=>false,
-			'sum'=>false,
-			'debug'=>$this->options['debug'],
-			'return_query'=>false,
-			'stream'=>false,
-			'quick-cache'=>true,
+			'multiple' => false,
+			'operator' => 'AND',
+			'distinct' => false,
+			'limit' => false,
+			'order_by' => false,
+			'group_by' => false,
+			'auto_ml' => $auto_ml,
+			'lang' => $lang,
+			'joins' =>  [],
+			'field' => false,
+			'max' => false,
+			'sum' => false,
+			'debug' => $this->options['debug'],
+			'return_query' => false,
+			'stream' => false,
+			'quick-cache' => true,
 		], $opt);
 		if($options['multiple']===false and $options['limit']===false)
 			$options['limit'] = 1;
