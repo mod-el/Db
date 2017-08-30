@@ -452,7 +452,7 @@ class Db extends Module{
 	 * @param array $opt
 	 * @return mixed
 	 */
-	public function select_all($table, $where=array(), array $opt=array()){
+	public function select_all($table, $where = [], array $opt = []){
 		$opt['multiple'] = true;
 		return $this->select($table, $where, $opt);
 	}
@@ -463,7 +463,7 @@ class Db extends Module{
 	 * @param array|string $opt
 	 * @return mixed
 	 */
-	public function select($table, $where=array(), $opt=array()){
+	public function select($table, $where = [], $opt = []){
 		if($where===false or $where===null)
 			return false;
 		if(!is_array($where) and is_numeric($where))
@@ -475,7 +475,7 @@ class Db extends Module{
 		$auto_ml = ($multilang and array_key_exists($table, $multilang->tables)) ? true : false;
 		$lang = $multilang ? $multilang->lang : 'it';
 
-		$options = array_merge(array(
+		$options = array_merge([
 			'multiple'=>false,
 			'operator'=>'AND',
 			'distinct'=>false,
@@ -484,14 +484,15 @@ class Db extends Module{
 			'group_by'=>false,
 			'auto_ml'=>$auto_ml,
 			'lang'=>$lang,
-			'joins'=>array(),
+			'joins'=> [],
 			'field'=>false,
 			'max'=>false,
 			'sum'=>false,
 			'debug'=>$this->options['debug'],
 			'return_query'=>false,
-			'stream'=>false
-		), $opt);
+			'stream'=>false,
+			'quick-cache'=>true,
+		], $opt);
 		if($options['multiple']===false and $options['limit']===false)
 			$options['limit'] = 1;
 
@@ -594,12 +595,14 @@ class Db extends Module{
 		if($options['debug'] and DEBUG_MODE)
 			echo '<b>QUERY DEBUG:</b> '.$qry.'<br />';
 
-		$cacheKey = md5($qry.((string) $options['field']).((string) $options['max']).((string) $options['sum']).((int) $options['multiple']));
-		if(isset($this->queryCache[$table][$cacheKey])){
-			if($this->queryCache[$table][$cacheKey]['query']==$qry)
-				return $this->queryCache[$table][$cacheKey]['res'];
-			else
-				unset($this->queryCache[$table][$cacheKey]);
+		if($options['quick-cache']) {
+			$cacheKey = md5($qry . ((string)$options['field']) . ((string)$options['max']) . ((string)$options['sum']) . ((int)$options['multiple']));
+			if (isset($this->queryCache[$table][$cacheKey])) {
+				if ($this->queryCache[$table][$cacheKey]['query'] == $qry)
+					return $this->queryCache[$table][$cacheKey]['res'];
+				else
+					unset($this->queryCache[$table][$cacheKey]);
+			}
 		}
 
 		if(!isset($this->n_tables[$table]))
@@ -631,10 +634,12 @@ class Db extends Module{
 			$return = $this->normalizeTypesInSelect($table, $q->fetch());
 		}
 
-		$this->queryCache[$table][$cacheKey] = [
-			'query'=>$qry,
-			'res'=>$return,
-		];
+		if($options['quick-cache']) {
+			$this->queryCache[$table][$cacheKey] = [
+				'query' => $qry,
+				'res' => $return,
+			];
+		}
 
 		return $return;
 	}
