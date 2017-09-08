@@ -319,11 +319,11 @@ class Db extends Module{
 			$this->model->error('Error while updating.', '<b>Error:</b> No data array was given!');
 		}
 		if(!is_array($where) and is_numeric($where))
-			$where = ['id'=>$where];
+			$where = ['id' => $where];
 
 		$options = array_merge(array(
-			'confirm'=>false,
-			'debug'=>$this->options['debug'],
+			'confirm' => false,
+			'debug' => $this->options['debug'],
 		), $options);
 
 		$this->trigger('update', [
@@ -337,18 +337,30 @@ class Db extends Module{
 		$data = $this->filterColumns($table, $data);
 		$this->checkDbData($table, $data, $options);
 
+		if($data===[])
+			return true;
+
 		if($this->tables[$table]!==false and isset($this->tables[$table]->columns['zkversion'], $data['zkversion'])){
-			$prev_versions = $this->select_all($table, $where, ['stream'=>true]);
+			$ids_updated = [];
+
+			$prev_versions = $this->select_all($table, $where, ['stream' => true]);
 			foreach($prev_versions as $r){
 				if($r['zkversion']>$data['zkversion'])
 					$this->model->error('A new version of this element has been saved.', ['code'=>'zkversion-mismatch']);
+
+				$ids_updated[] = $r['id'];
 			}
+
 			$data['zkversion']++;
+
+			$this->trigger('zkversion_update', [
+				'table' => $table,
+				'rows' => $ids_updated,
+				'version' => $data['zkversion'],
+			]);
 		}
 
-		if(array_keys($data)==array('zkversion')) // Only version number? There is no useful data then
-			return true;
-		if($data===array())
+		if(array_keys($data)== ['zkversion']) // Only version number? There is no useful data then
 			return true;
 
 		$where_str = $this->makeSqlString($table, $where, ' AND ');
@@ -356,7 +368,7 @@ class Db extends Module{
 		if(empty($where_str) and !$options['confirm'])
 			$this->model->error('Tried to update full table without explicit confirm');
 
-		$qry = 'UPDATE `'.$this->makeSafe($table).'` SET '.$this->makeSqlString($table, $data, ',', array('for_where'=>false)).$where_str;
+		$qry = 'UPDATE `'.$this->makeSafe($table).'` SET '.$this->makeSqlString($table, $data, ',', ['for_where' => false]).$where_str;
 
 		if($options['debug'] and DEBUG_MODE)
 			echo '<b>QUERY DEBUG:</b> '.$qry.'<br />';
