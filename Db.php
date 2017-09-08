@@ -310,11 +310,11 @@ class Db extends Module{
 	/**
 	 * @param string $table
 	 * @param array|int $where
-	 * @param array|bool $data
+	 * @param array $data
 	 * @param array $options
 	 * @return bool
 	 */
-	public function update($table, $where, $data=false, array $options=array()){
+	public function update($table, $where, array $data = null, array $options=array()){
 		if(!is_array($data)){
 			$this->model->error('Error while updating.', '<b>Error:</b> No data array was given!');
 		}
