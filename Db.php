@@ -237,18 +237,14 @@ class Db extends Module{
 
 	/**
 	 * @param string $table
-	 * @param array|bool $data
+	 * @param array $data
 	 * @param array $options
 	 * @return int
 	 */
-	public function insert($table, $data=false, array $options=array()){
-		if(!is_array($data)){
-			$this->model->error('Error while inserting.', '<b>Error:</b> No data array was given!');
-		}
-
+	public function insert($table, array $data = [], array $options = []){
 		$options = array_merge(array(
-			'replace'=>false,
-			'debug'=>$this->options['debug'],
+			'replace' => false,
+			'debug' => $this->options['debug'],
 		), $options);
 
 		$this->trigger('insert', [
@@ -259,40 +255,34 @@ class Db extends Module{
 
 		$this->loadTable($table);
 		$data = $this->filterColumns($table, $data);
-		$this->checkDbData($table, $data, $options);
+		$this->checkDbData($table, $data['data'], $options);
+		if($data['multilang']){
+			$multilangTable = $this->model->_Multilang->getTableFor($table);
+			$multilangOptions = $this->model->_Multilang->getTableOptionsFor($table);
+			foreach($data['multilang'] as $lang => $multilangData){
+				$this->checkDbData($multilangTable, $multilangData, $options);
+			}
+		}
 
 		try{
-			$qry_init = $options['replace'] ? 'REPLACE' : 'INSERT';
-
-			if($data===array()){
-				$tableModel = $this->getTable($table);
-				$arrIns = array();
-				foreach($tableModel->columns as $k=>$c){
-					if($c['null']){
-						$arrIns[] = 'NULL';
-					}else{
-						if($c['key']=='PRI')
-							$arrIns[] = 'NULL';
-						else
-							$arrIns[] = '\'\'';
-					}
-				}
-				$qry = $qry_init.' INTO `'.$this->makeSafe($table).'` VALUES('.implode(',', $arrIns).')';
-			}else{
-				$keys = array(); $values = array();
-				foreach($data as $k => $v){
-					$keys[] = $this->elaborateField($table, $k);
-					if($v===null) $values[] = 'NULL';
-					else $values[] = $this->elaborateValue($v);
-				}
-
-				$qry = $qry_init.' INTO `'.$this->makeSafe($table).'`('.implode(',', $keys).') VALUES('.implode(',', $values).')';
-			}
+			$qry = $this->makeQueryForInsert($table, $data['data'], $options);
 
 			if($options['debug'] and DEBUG_MODE)
 				echo '<b>QUERY DEBUG:</b> '.$qry.'<br />';
 
 			$id = $this->query($qry, $table, 'INSERT', $options);
+
+			foreach($data['multilang'] as $lang => $multilangData){
+				$multilangData[$multilangOptions['keyfield']] = $id;
+				$multilangData[$multilangOptions['lang']] = $lang;
+
+				$qry = $this->makeQueryForInsert($multilangTable, $multilangData, $options);
+
+				if($options['debug'] and DEBUG_MODE)
+					echo '<b>QUERY DEBUG:</b> '.$qry.'<br />';
+
+				$this->query($qry, $multilangTable, 'INSERT', $options);
+			}
 
 			$this->trigger('inserted', [
 				'table' => $table,
@@ -305,6 +295,45 @@ class Db extends Module{
 		}catch(\Exception $e){
 			$this->model->error('Error while inserting.', '<b>Error:</b> '.getErr($e).'<br /><b>Query:</b> '.$qry);
 		}
+	}
+
+	/**
+	 * Builds a query for the insert method
+	 *
+	 * @param string $table
+	 * @param array $data
+	 * @param array $options
+	 * @return string
+	 */
+	private function makeQueryForInsert($table, array $data, array $options){
+		$qry_init = $options['replace'] ? 'REPLACE' : 'INSERT';
+
+		if($data===[]){
+			$tableModel = $this->getTable($table);
+			$arrIns = [];
+			foreach($tableModel->columns as $k=>$c){
+				if($c['null']){
+					$arrIns[] = 'NULL';
+				}else{
+					if($c['key']=='PRI')
+						$arrIns[] = 'NULL';
+					else
+						$arrIns[] = '\'\'';
+				}
+			}
+			$qry = $qry_init.' INTO `'.$this->makeSafe($table).'` VALUES('.implode(',', $arrIns).')';
+		}else{
+			$keys = []; $values = [];
+			foreach($data as $k => $v){
+				$keys[] = $this->elaborateField($table, $k);
+				if($v===null) $values[] = 'NULL';
+				else $values[] = $this->elaborateValue($v);
+			}
+
+			$qry = $qry_init.' INTO `'.$this->makeSafe($table).'`('.implode(',', $keys).') VALUES('.implode(',', $values).')';
+		}
+
+		return $qry;
 	}
 
 	/**
@@ -335,46 +364,68 @@ class Db extends Module{
 
 		$this->loadTable($table);
 		$data = $this->filterColumns($table, $data);
-		$this->checkDbData($table, $data, $options);
+		$this->checkDbData($table, $data['data'], $options);
+		if($data['multilang']){
+			$multilangTable = $this->model->_Multilang->getTableFor($table);
+			$multilangOptions = $this->model->_Multilang->getTableOptionsFor($table);
+			foreach($data['multilang'] as $lang => $multilangData){
+				$this->checkDbData($multilangTable, $multilangData, $options);
+			}
+		}
 
-		if($data===[])
-			return true;
-
-		if($this->tables[$table]!==false and isset($this->tables[$table]->columns['zkversion'], $data['zkversion'])){
-			$ids_updated = [];
+		if($this->tables[$table]!==false and isset($this->tables[$table]->columns['zkversion'], $data['data']['zkversion'])){
+			$zkversion_ids_updated = [];
 
 			$prev_versions = $this->select_all($table, $where, ['stream' => true]);
 			foreach($prev_versions as $r){
-				if($r['zkversion']>$data['zkversion'])
+				if($r['zkversion']>$data['data']['zkversion'])
 					$this->model->error('A new version of this element has been saved.');
 
-				$ids_updated[] = $r['id'];
+				$zkversion_ids_updated[] = $r['id'];
 			}
 
-			$data['zkversion']++;
-
-			$this->trigger('zkversion_update', [
-				'table' => $table,
-				'rows' => $ids_updated,
-				'version' => $data['zkversion'],
-			]);
+			$data['data']['zkversion']++;
 		}
 
-		if(array_keys($data)===['zkversion']) // Only version number? There is no useful data then
-			return true;
-
-		$where_str = $this->makeSqlString($table, $where, ' AND ');
-		$where_str = empty($where_str) ? '' : ' WHERE '.$where_str;
+		$where_str = $this->makeSqlString($table, $where, ' AND ', ['main_alias' => 't']);
 		if(empty($where_str) and !$options['confirm'])
 			$this->model->error('Tried to update full table without explicit confirm');
 
-		$qry = 'UPDATE `'.$this->makeSafe($table).'` SET '.$this->makeSqlString($table, $data, ',', ['for_where' => false]).$where_str;
-
-		if($options['debug'] and DEBUG_MODE)
-			echo '<b>QUERY DEBUG:</b> '.$qry.'<br />';
-
 		try{
-			$this->query($qry, $table, 'UPDATE', $options);
+			if(array_keys($data['data'])===['zkversion']) // Only version number? There is no useful data then
+				unset($data['data']['zkversion']);
+
+			if($data['data']){
+				$qry = 'UPDATE `'.$this->makeSafe($table).'` AS `t` SET '.$this->makeSqlString($table, $data['data'], ',', ['for_where' => false]).($where_str ? ' WHERE '.$where_str : '');
+
+				if($options['debug'] and DEBUG_MODE)
+					echo '<b>QUERY DEBUG:</b> '.$qry.'<br />';
+
+				$this->query($qry, $table, 'UPDATE', $options);
+			}
+
+			foreach($data['multilang'] as $lang => $multilangData){
+				if(!$multilangData)
+					continue;
+
+				$ml_where_str = ' WHERE `ml`.`'.$this->makeSafe($multilangOptions['lang']).'` = '.$this->db->quote($lang);
+				if($where_str)
+					$ml_where_str .= ' AND ('.$where_str.')';
+				$qry = 'UPDATE `'.$this->makeSafe($multilangTable).'` AS `ml` INNER JOIN `'.$this->makeSafe($table).'` AS `t` ON `t`.`id` = `ml`.`'.$this->makeSafe($multilangOptions['keyfield']).'` SET '.$this->makeSqlString($table, $multilangData, ',', ['for_where' => false, 'main_alias' => 'ml']).$ml_where_str;
+
+				if($options['debug'] and DEBUG_MODE)
+					echo '<b>QUERY DEBUG:</b> '.$qry.'<br />';
+
+				$this->query($qry, $table, 'UPDATE', $options);
+			}
+
+			if(isset($zkversion_ids_updated)){
+				$this->trigger('zkversion_update', [
+					'table' => $table,
+					'rows' => $zkversion_ids_updated,
+					'version' => $data['zkversion'],
+				]);
+			}
 
 			$this->changedTable($table);
 		}catch(\Exception $e){
@@ -1271,15 +1322,43 @@ class Db extends Module{
 	 * @return array
 	 */
 	private function filterColumns($table, array $data){
-		if($this->tables[$table]===false)
-			return $data;
+		$tableModel = $this->loadTable($table);
 
-		$realData = array();
+		$mainData = [];
 		foreach($data as $k => $v){
-			if(array_key_exists($k, $this->tables[$table]->columns))
-				$realData[$k] = $v;
+			if(array_key_exists($k, $tableModel->columns))
+				$mainData[$k] = $v;
 		}
-		return $realData;
+
+		$multilangData = [];
+		if($this->model->isLoaded('Multilang') and array_key_exists($table, $this->model->_Multilang->tables)){
+			foreach($this->model->_Multilang->langs as $lang){
+				$multilangData[$lang] = [];
+			}
+
+			foreach($data as $k => $v){
+				if(in_array($k, $this->model->_Multilang->tables[$table]['fields'])){
+					if(array_key_exists($k, $mainData)){ // A field cannot exist both in the main table and in the multilang table
+						unset($mainData[$k]);
+					}
+
+					if(!is_array($v)){
+						$v = [
+							$this->model->_Multilang->lang => $v,
+						];
+					}
+
+					foreach($v as $lang => $subValue){
+						$multilangData[$lang][$k] = $subValue;
+					}
+				}
+			}
+		}
+
+		return [
+			'data' => $mainData,
+			'multilang' => $multilangData,
+		];
 	}
 
 	/**
