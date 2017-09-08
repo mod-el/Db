@@ -901,8 +901,12 @@ class Db extends Module{
 	 * @param array $options
 	 * @return bool
 	 */
-	private function checkDbData($table, array $data, array $options=array()){
-		$options = array_merge(array('check'=>true, 'checkTypes'=>true, 'checkLengths'=>false), $options);
+	private function checkDbData($table, array $data, array $options = []){
+		$options = array_merge([
+			'check' => true,
+			'checkTypes' => true,
+			'checkLengths' => false,
+		], $options);
 		if($options['check']===false or $this->tables[$table]===false) // Se è stata disabilitata la verifica dalle opzioni, oppure non esiste file di configurazione per questa tabella, salto la verifica
 			return true;
 
