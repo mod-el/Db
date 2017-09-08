@@ -314,17 +314,17 @@ class Db extends Module{
 	 * @param array $options
 	 * @return bool
 	 */
-	public function update($table, $where, array $data = null, array $options=array()){
+	public function update($table, $where, array $data = null, array $options = []){
 		if(!is_array($data)){
 			$this->model->error('Error while updating.', '<b>Error:</b> No data array was given!');
 		}
 		if(!is_array($where) and is_numeric($where))
 			$where = ['id' => $where];
 
-		$options = array_merge(array(
+		$options = array_merge([
 			'confirm' => false,
 			'debug' => $this->options['debug'],
-		), $options);
+		], $options);
 
 		$this->trigger('update', [
 			'table' => $table,
@@ -346,7 +346,7 @@ class Db extends Module{
 			$prev_versions = $this->select_all($table, $where, ['stream' => true]);
 			foreach($prev_versions as $r){
 				if($r['zkversion']>$data['zkversion'])
-					$this->model->error('A new version of this element has been saved.', ['code'=>'zkversion-mismatch']);
+					$this->model->error('A new version of this element has been saved.');
 
 				$ids_updated[] = $r['id'];
 			}
@@ -360,7 +360,7 @@ class Db extends Module{
 			]);
 		}
 
-		if(array_keys($data)== ['zkversion']) // Only version number? There is no useful data then
+		if(array_keys($data)===['zkversion']) // Only version number? There is no useful data then
 			return true;
 
 		$where_str = $this->makeSqlString($table, $where, ' AND ');
