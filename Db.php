@@ -242,6 +242,9 @@ class Db extends Module{
 	 * @return int
 	 */
 	public function insert($table, array $data = [], array $options = []){
+		if(!is_string($table))
+			$this->model->error('First argument (table name) in "insert" should be a string');
+
 		$options = array_merge(array(
 			'replace' => false,
 			'debug' => $this->options['debug'],
@@ -344,6 +347,9 @@ class Db extends Module{
 	 * @return bool
 	 */
 	public function update($table, $where, array $data = null, array $options = []){
+		if(!is_string($table))
+			$this->model->error('First argument (table name) in "update" should be a string');
+
 		if(!is_array($data)){
 			$this->model->error('Error while updating.', '<b>Error:</b> No data array was given!');
 		}
@@ -442,6 +448,9 @@ class Db extends Module{
 	 * @return bool|int
 	 */
 	public function updateOrInsert($table, $where, $data=false, array $options=array()){
+		if(!is_string($table))
+			$this->model->error('First argument (table name) in "update" should be a string');
+
 		if(!is_array($data)){
 			$this->model->error('Error while updating.', '<b>Error:</b> No data array was given!');
 		}
@@ -462,6 +471,8 @@ class Db extends Module{
 	 * @return bool
 	 */
 	public function delete($table, $where=array(), array $options=array()){
+		if(!is_string($table))
+			$this->model->error('First argument (table name) in "delete" should be a string');
 		if(!is_array($where) and is_numeric($where)){
 			$where = array('id'=>$where);
 		}
@@ -527,6 +538,8 @@ class Db extends Module{
 	 * @return mixed
 	 */
 	public function select($table, $where = [], $opt = []){
+		if(!is_string($table))
+			$this->model->error('First argument (table name) in "select" should be a string');
 		if($where===false or $where===null)
 			return false;
 		if(!is_array($where) and is_numeric($where))
@@ -714,6 +727,9 @@ class Db extends Module{
 	 * @return int
 	 */
 	public function count($table, $where=array(), array $opt=array()){
+		if(!is_string($table))
+			$this->model->error('First argument (table name) in "count" should be a string');
+
 		if($where===false or $where===null)
 			return false;
 		if(!is_array($where) and is_numeric($where))
