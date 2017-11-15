@@ -183,7 +183,7 @@ $foreign_keys = '.var_export($foreign_keys, true).';
 			];
 		}
 
-		$configFileDir = INCLUDE_PATH.'data'.DIRECTORY_SEPARATOR.'config'.DIRECTORY_SEPARATOR.'Db';
+		$configFileDir = INCLUDE_PATH.'app'.DIRECTORY_SEPARATOR.'config'.DIRECTORY_SEPARATOR.'Db';
 		if(!is_dir($configFileDir))
 			mkdir($configFileDir, 0777, true);
 
