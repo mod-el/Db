@@ -1,5 +1,4 @@
-<?php
-namespace Model;
+<?php namespace Model\Db;
 
 class Table{
 	/** @var string */
