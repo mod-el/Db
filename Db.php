@@ -50,6 +50,7 @@ class Db extends Module
 
 	/**
 	 * @param array $options
+	 * @throws \Model\Core\ZkException
 	 */
 	public function init($options)
 	{
@@ -119,6 +120,7 @@ class Db extends Module
 	 * @param string|bool $type
 	 * @param array $options
 	 * @return \PDOStatement|int
+	 * @throws \Model\Core\ZkException
 	 */
 	public function query($qry, $table = false, $type = false, array $options = [])
 	{
@@ -251,6 +253,7 @@ class Db extends Module
 	 * @param array $data
 	 * @param array $options
 	 * @return int
+	 * @throws \Model\Core\ZkException
 	 */
 	public function insert($table, array $data = [], array $options = [])
 	{
@@ -359,6 +362,7 @@ class Db extends Module
 	 * @param array $data
 	 * @param array $options
 	 * @return bool
+	 * @throws \Model\Core\ZkException
 	 */
 	public function update($table, $where, array $data = null, array $options = [])
 	{
@@ -461,6 +465,7 @@ class Db extends Module
 	 * @param array|bool $data
 	 * @param array $options
 	 * @return bool|int
+	 * @throws \Model\Core\ZkException
 	 */
 	public function updateOrInsert($table, $where, $data = false, array $options = array())
 	{
@@ -485,6 +490,7 @@ class Db extends Module
 	 * @param array|int $where
 	 * @param array $options
 	 * @return bool
+	 * @throws \Model\Core\ZkException
 	 */
 	public function delete($table, $where = array(), array $options = array())
 	{
@@ -554,6 +560,7 @@ class Db extends Module
 	 * @param array|int $where
 	 * @param array|string $opt
 	 * @return mixed
+	 * @throws \Model\Core\ZkException
 	 */
 	public function select($table, $where = [], $opt = [])
 	{
@@ -745,6 +752,7 @@ class Db extends Module
 	 * @param array|int $where
 	 * @param array $opt
 	 * @return int
+	 * @throws \Model\Core\ZkException
 	 */
 	public function count($table, $where = array(), array $opt = array())
 	{
@@ -897,6 +905,7 @@ class Db extends Module
 	 * @param string $table
 	 * @param array $joins
 	 * @return array
+	 * @throws \Model\Core\ZkException
 	 */
 	private function elaborateJoins($table, array $joins)
 	{
@@ -990,6 +999,7 @@ class Db extends Module
 	 * @param array $data
 	 * @param array $options
 	 * @return bool
+	 * @throws \Model\Core\ZkException
 	 */
 	private function checkDbData($table, array $data, array $options = [])
 	{
@@ -1020,6 +1030,7 @@ class Db extends Module
 	 * @param array $where
 	 * @param array $opt
 	 * @return bool
+	 * @throws \Model\Core\ZkException
 	 */
 	private function canUseCache($table, array $where = array(), array $opt = array())
 	{
@@ -1155,6 +1166,7 @@ class Db extends Module
 	 * @param string $k
 	 * @param array $opt
 	 * @return string
+	 * @throws \Model\Core\ZkException
 	 */
 	private function elaborateField($table, $k, array $opt = array())
 	{
@@ -1206,6 +1218,7 @@ class Db extends Module
 	/**
 	 * @param mixed $v
 	 * @return string
+	 * @throws \Model\Core\ZkException
 	 */
 	private function elaborateValue($v)
 	{
@@ -1225,6 +1238,7 @@ class Db extends Module
 	 * @param string $collante
 	 * @param array $opt
 	 * @return string
+	 * @throws \Model\Core\ZkException
 	 */
 	public function makeSqlString($table, $array, $collante, array $opt = array())
 	{
