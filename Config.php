@@ -9,6 +9,7 @@ class Config extends Module_Config {
 	 * Caches all the tables structure
 	 *
 	 * @return bool
+	 * @throws \Model\Core\ZkException
 	 */
 	public function makeCache(){
 		$path = INCLUDE_PATH.'model'.DIRECTORY_SEPARATOR.'Db'.DIRECTORY_SEPARATOR;
@@ -139,7 +140,7 @@ $foreign_keys = '.var_export($foreign_keys, true).';
 	 * @return string
 	 */
 	public function getTemplate(array $request){
-		return INCLUDE_PATH.'model'.DIRECTORY_SEPARATOR.'Db'.DIRECTORY_SEPARATOR.'templates'.DIRECTORY_SEPARATOR.'config';
+		return 'config';
 	}
 
 	/**
