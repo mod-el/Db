@@ -9,7 +9,7 @@ class Config extends Module_Config {
 	 * Caches all the tables structure
 	 *
 	 * @return bool
-	 * @throws \Model\Core\ZkException
+	 * @throws \Model\Core\Exception
 	 */
 	public function makeCache(){
 		$path = INCLUDE_PATH.'model'.DIRECTORY_SEPARATOR.'Db'.DIRECTORY_SEPARATOR;
