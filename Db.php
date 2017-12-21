@@ -322,6 +322,7 @@ class Db extends Module
 	 * @param array $data
 	 * @param array $options
 	 * @return string
+	 * @throws \Model\Core\Exception
 	 */
 	private function makeQueryForInsert($table, array $data, array $options)
 	{
@@ -548,6 +549,7 @@ class Db extends Module
 	 * @param array|int $where
 	 * @param array $opt
 	 * @return mixed
+	 * @throws \Model\Core\Exception
 	 */
 	public function select_all($table, $where = [], array $opt = [])
 	{
