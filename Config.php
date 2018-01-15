@@ -205,12 +205,25 @@ $config = '.var_export($config, true).';
 		if(!$this->saveConfig('install', $data))
 			return false;
 
-		return $this->model->_Db->query('CREATE TABLE IF NOT EXISTS `main_settings` (
+		$this->model->_Db->query('CREATE TABLE IF NOT EXISTS `main_settings` (
 		  `id` int(11) NOT NULL AUTO_INCREMENT,
 		  `k` varchar(255) COLLATE utf8_unicode_ci NOT NULL,
 		  `v` text COLLATE utf8_unicode_ci NULL,
 		  PRIMARY KEY (`id`)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;');
+
+		$this->model->_Db->query('CREATE TABLE IF NOT EXISTS `model_version_locks` (
+		  `id` int(11) NOT NULL AUTO_INCREMENT,
+		  `table` varchar(250) COLLATE utf8_unicode_ci NOT NULL,
+		  `row` int(11) NOT NULL,
+		  `version` int(10) unsigned NOT NULL,
+		  `date` datetime NOT NULL,
+		  PRIMARY KEY (`id`),
+		  KEY `admin_version_locks_idx` (`table`,`row`),
+		  KEY `model_version_locks_date` (`date`)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;');
+
+		return true;
 	}
 
 	/**
@@ -241,5 +254,19 @@ $config = '.var_export($config, true).';
 		$keys['new-database'] = ['label'=>'Database name for a new database (if creating one)', 'default'=>null];
 
 		return $keys;
+	}
+
+	public function postUpdate_1_3_0(){
+		$this->model->_Db->query('CREATE TABLE IF NOT EXISTS `model_version_locks` (
+		  `id` int(11) NOT NULL AUTO_INCREMENT,
+		  `table` varchar(250) COLLATE utf8_unicode_ci NOT NULL,
+		  `row` int(11) NOT NULL,
+		  `version` int(10) unsigned NOT NULL,
+		  `date` datetime NOT NULL,
+		  PRIMARY KEY (`id`),
+		  KEY `admin_version_locks_idx` (`table`,`row`),
+		  KEY `model_version_locks_date` (`date`)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;');
+		return true;
 	}
 }
