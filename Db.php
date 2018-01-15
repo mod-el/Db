@@ -377,6 +377,7 @@ class Db extends Module
 			$where = ['id' => $where];
 
 		$options = array_merge([
+			'version' => null,
 			'confirm' => false,
 			'debug' => $this->options['debug'],
 		], $options);
@@ -399,18 +400,18 @@ class Db extends Module
 			}
 		}
 
-		if ($this->tables[$table] !== false and isset($this->tables[$table]->columns['zkversion'], $data['data']['zkversion'])) {
-			$zkversion_ids_updated = [];
+		if ($options['version'] !== null and array_keys($where) === ['id']) {
+			$lastVersion = $this->getVersionLock($table, $where['id']);
 
-			$prev_versions = $this->select_all($table, $where, ['stream' => true]);
-			foreach ($prev_versions as $r) {
-				if ($r['zkversion'] > $data['data']['zkversion'])
-					$this->model->error('A new version of this element has been saved.');
+			if ($lastVersion > $options['version'])
+				$this->model->error('A new version of this element has been saved in the meanwhile. Reload the page and try again.');
 
-				$zkversion_ids_updated[] = $r['id'];
-			}
-
-			$data['data']['zkversion']++;
+			$this->insert('model_version_locks', [
+				'table' => $table,
+				'row' => $where['id'],
+				'version' => $options['version'] + 1,
+				'date' => date('Y-m-d H:i:s'),
+			]);
 		}
 
 		$where_str = $this->makeSqlString($table, $where, ' AND ', ['main_alias' => 't']);
@@ -418,9 +419,6 @@ class Db extends Module
 			$this->model->error('Tried to update full table without explicit confirm');
 
 		try {
-			if (array_keys($data['data']) === ['zkversion']) // Only version number? There is no useful data then
-				unset($data['data']['zkversion']);
-
 			if ($data['data']) {
 				$qry = 'UPDATE `' . $this->makeSafe($table) . '` AS `t` SET ' . $this->makeSqlString($table, $data['data'], ',', ['for_where' => false]) . ($where_str ? ' WHERE ' . $where_str : '');
 
@@ -443,14 +441,6 @@ class Db extends Module
 					echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
 
 				$this->query($qry, $table, 'UPDATE', $options);
-			}
-
-			if (isset($zkversion_ids_updated)) {
-				$this->trigger('zkversion_update', [
-					'table' => $table,
-					'rows' => $zkversion_ids_updated,
-					'version' => $data['zkversion'],
-				]);
 			}
 
 			$this->changedTable($table);
@@ -1444,5 +1434,23 @@ class Db extends Module
 	{
 		$this->loadTable($table);
 		return $this->tables[$table];
+	}
+
+	/**
+	 * @param string $table
+	 * @param int $id
+	 * @return int
+	 * @throws \Model\Core\Exception
+	 */
+	public function getVersionLock($table, $id)
+	{
+		$version = $this->select('model_version_locks', [
+			'table' => $table,
+			'row' => $id,
+		], [
+			'order_by' => 'id DESC',
+		]);
+
+		return $version ? $version['version'] : 1;
 	}
 }
