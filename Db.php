@@ -106,7 +106,7 @@ class Db extends Module
 	 * @param array $arguments
 	 * @return mixed
 	 */
-	function __call($name, array $arguments)
+	function __call(string $name, array $arguments)
 	{
 		if (method_exists($this->db, $name)) {
 			return call_user_func_array(array($this->db, $name), $arguments);
@@ -116,13 +116,13 @@ class Db extends Module
 
 	/**
 	 * @param string $qry
-	 * @param string|bool $table
-	 * @param string|bool $type
+	 * @param string $table
+	 * @param string $type
 	 * @param array $options
 	 * @return \PDOStatement|int
 	 * @throws \Model\Core\Exception
 	 */
-	public function query($qry, $table = false, $type = false, array $options = [])
+	public function query(string $qry, string $table = null, string $type = null, array $options = [])
 	{
 		$options = array_merge([
 			'log' => true,
@@ -138,7 +138,7 @@ class Db extends Module
 				$this->model->error('Query limit exceeded. - ' . $qry);
 		}
 
-		if ($options['query-limit'] and $this->options['query-limit-table'] > 0 and $table !== false) {
+		if ($options['query-limit'] and $this->options['query-limit-table'] > 0 and $table !== null) {
 			if (!isset($this->querylimit_counter['table'][$table]))
 				$this->querylimit_counter['table'][$table] = 0;
 			$this->querylimit_counter['table'][$table]++;
@@ -161,7 +161,7 @@ class Db extends Module
 		$this->n_query++;
 		$res = $this->db->query($qry);
 		$return = $res;
-		if ($res and $type == 'INSERT') {
+		if ($res and $type === 'INSERT') {
 			$return = $this->db->lastInsertId();
 			$row_id = $return;
 		} else {
@@ -183,7 +183,7 @@ class Db extends Module
 	 * @param array $options
 	 * @return \PDOStatement
 	 */
-	public function prepare($qry, array $options = array())
+	public function prepare(string $qry, array $options = []): \PDOStatement
 	{
 		$this->n_prepared++;
 		return $this->db->prepare($qry, $options);
@@ -232,7 +232,7 @@ class Db extends Module
 	 * @param int $ignore
 	 * @return bool
 	 */
-	public function inTransaction($ignore = 0)
+	public function inTransaction(int $ignore = 0): bool
 	{
 		return ($this->c_transactions - $ignore) > 0 ? true : false;
 	}
@@ -255,11 +255,8 @@ class Db extends Module
 	 * @return int
 	 * @throws \Model\Core\Exception
 	 */
-	public function insert($table, array $data = [], array $options = [])
+	public function insert(string $table, array $data = [], array $options = []): int
 	{
-		if (!is_string($table))
-			$this->model->error('First argument (table name) in "insert" should be a string');
-
 		$options = array_merge(array(
 			'replace' => false,
 			'debug' => $this->options['debug'],
@@ -324,7 +321,7 @@ class Db extends Module
 	 * @return string
 	 * @throws \Model\Core\Exception
 	 */
-	private function makeQueryForInsert($table, array $data, array $options)
+	private function makeQueryForInsert(string $table, array $data, array $options): string
 	{
 		$qry_init = $options['replace'] ? 'REPLACE' : 'INSERT';
 
@@ -365,11 +362,8 @@ class Db extends Module
 	 * @return bool
 	 * @throws \Model\Core\Exception
 	 */
-	public function update($table, $where, array $data = null, array $options = [])
+	public function update(string $table, $where, array $data = null, array $options = []): bool
 	{
-		if (!is_string($table))
-			$this->model->error('First argument (table name) in "update" should be a string');
-
 		if (!is_array($data)) {
 			$this->model->error('Error while updating.', '<b>Error:</b> No data array was given!');
 		}
@@ -453,16 +447,13 @@ class Db extends Module
 	/**
 	 * @param string $table
 	 * @param array|int $where
-	 * @param array|bool $data
+	 * @param array $data
 	 * @param array $options
 	 * @return bool|int
 	 * @throws \Model\Core\Exception
 	 */
-	public function updateOrInsert($table, $where, $data = false, array $options = array())
+	public function updateOrInsert(string $table, $where, array $data = null, array $options = [])
 	{
-		if (!is_string($table))
-			$this->model->error('First argument (table name) in "update" should be a string');
-
 		if (!is_array($data)) {
 			$this->model->error('Error while updating.', '<b>Error:</b> No data array was given!');
 		}
@@ -483,10 +474,8 @@ class Db extends Module
 	 * @return bool
 	 * @throws \Model\Core\Exception
 	 */
-	public function delete($table, $where = array(), array $options = array())
+	public function delete(string $table, $where = [], array $options = []): bool
 	{
-		if (!is_string($table))
-			$this->model->error('First argument (table name) in "delete" should be a string');
 		if (!is_array($where) and is_numeric($where)) {
 			$where = array('id' => $where);
 		}
@@ -541,7 +530,7 @@ class Db extends Module
 	 * @return mixed
 	 * @throws \Model\Core\Exception
 	 */
-	public function select_all($table, $where = [], array $opt = [])
+	public function select_all(string $table, $where = [], array $opt = [])
 	{
 		$opt['multiple'] = true;
 		return $this->select($table, $where, $opt);
@@ -554,10 +543,8 @@ class Db extends Module
 	 * @return mixed
 	 * @throws \Model\Core\Exception
 	 */
-	public function select($table, $where = [], $opt = [])
+	public function select(string $table, $where = [], $opt = [])
 	{
-		if (!is_string($table))
-			$this->model->error('First argument (table name) in "select" should be a string');
 		if ($where === false or $where === null)
 			return false;
 		if (!is_array($where) and is_numeric($where))
@@ -746,11 +733,8 @@ class Db extends Module
 	 * @return int
 	 * @throws \Model\Core\Exception
 	 */
-	public function count($table, $where = array(), array $opt = array())
+	public function count(string $table, $where = [], array $opt = []): int
 	{
-		if (!is_string($table))
-			$this->model->error('First argument (table name) in "count" should be a string');
-
 		if ($where === false or $where === null)
 			return false;
 		if (!is_array($where) and is_numeric($where))
@@ -870,27 +854,27 @@ class Db extends Module
 
 	/**
 	 * @param string $table
-	 * @param mixed $riga
-	 * @return array
+	 * @param mixed $row
+	 * @return mixed
 	 */
-	private function normalizeTypesInSelect($table, $riga)
-	{  // Al momento agisce solo sui campi decimal, per trasformarli in float effettivi, ma può essere ampliata in futuro
-		if (!is_array($riga))
-			return $riga;
+	private function normalizeTypesInSelect(string $table, $row)
+	{
+		if (!is_array($row))
+			return $row;
 		if (!isset($this->tables[$table]) or !$this->tables[$table])
-			return $riga;
+			return $row;
 
-		foreach ($riga as $k => $v) {
+		foreach ($row as $k => $v) {
 			if ($v === null or $v === false)
 				continue;
 			if (array_key_exists($k, $this->tables[$table]->columns)) {
 				if (in_array($this->tables[$table]->columns[$k]['type'], ['double', 'float', 'decimal']))
-					$riga[$k] = (float)$v;
+					$row[$k] = (float)$v;
 				if (in_array($this->tables[$table]->columns[$k]['type'], ['tinyint', 'smallint', 'mediumint', 'int', 'bigint', 'year']))
-					$riga[$k] = (int)$v;
+					$row[$k] = (int)$v;
 			}
 		}
-		return $riga;
+		return $row;
 	}
 
 	/**
@@ -899,7 +883,7 @@ class Db extends Module
 	 * @return array
 	 * @throws \Model\Core\Exception
 	 */
-	private function elaborateJoins($table, array $joins)
+	private function elaborateJoins(string $table, array $joins): array
 	{
 		/*
 		Formati possibili per un join:
@@ -911,16 +895,16 @@ class Db extends Module
 		['table'=>'nome tabella', 'on'=>'campo tabella principale', 'join_field'=>'campo tabella della join', 'fields'=>['campo1', 'campo2']]
 		*/
 
-		$return = array();
+		$return = [];
 		foreach ($joins as $k => $join) {
 			if (!is_array($join))
-				$join = array('table' => $join);
+				$join = ['table' => $join];
 			if (!isset($join['table']) and !isset($join['fields']) and !isset($join['on']) and !isset($join['main_field']) and !isset($join['full_on']))
-				$join = array('fields' => $join);
+				$join = ['fields' => $join];
 			if (!is_numeric($k) and !isset($join['table']))
 				$join['table'] = $k;
 			if (!isset($join['where']))
-				$join['where'] = array();
+				$join['where'] = [];
 
 			$tableModel = $this->getTable($table);
 			if (!isset($join['on'], $join['join_field']) and !isset($join['full_on'])) {
@@ -966,10 +950,10 @@ class Db extends Module
 					if ($joinTableModel === false)
 						$this->model->error('Errore durante la lettura dei dati.', 'Durante la lettura da <b>' . $table . '</b> e la join con la tabella <b>' . $join['table'] . '</b>, non sono stati forniti i campi da prendere da quest\'ultima (e non esiste modello per la tabella).');
 
-					$join['fields'] = array();
+					$join['fields'] = [];
 					foreach ($joinTableModel->columns as $k_c => $c) {
 						if (isset($tableModel->columns[$k_c])) {
-							$join['fields'][] = array('field' => $k_c, 'as' => $join['table'] . '_' . $k_c);
+							$join['fields'][] = ['field' => $k_c, 'as' => $join['table'] . '_' . $k_c];
 						} else {
 							$join['fields'][] = $k_c;
 						}
@@ -977,7 +961,7 @@ class Db extends Module
 				}
 
 				if (!is_array($join['fields']))
-					$join['fields'] = array($join['fields']);
+					$join['fields'] = [$join['fields']];
 			}
 
 			$return[] = $join;
@@ -993,7 +977,7 @@ class Db extends Module
 	 * @return bool
 	 * @throws \Model\Core\Exception
 	 */
-	private function checkDbData($table, array $data, array $options = [])
+	private function checkDbData(string $table, array $data, array $options = []): bool
 	{
 		$options = array_merge([
 			'check' => true,
@@ -1024,7 +1008,7 @@ class Db extends Module
 	 * @return bool
 	 * @throws \Model\Core\Exception
 	 */
-	private function canUseCache($table, array $where = array(), array $opt = array())
+	private function canUseCache(string $table, array $where = [], array $opt = []): bool
 	{
 		if (!in_array($table, $this->options['listCache']))
 			return false;
@@ -1044,8 +1028,10 @@ class Db extends Module
 		$multilang = $this->model->isLoaded('Multilang') ? $this->model->getModule('Multilang') : false;
 		$lang = $multilang ? $multilang->lang : 'it';
 
-		if ($opt['lang'] !== $lang) return false;
-		if (!empty($opt['joins'])) return false;
+		if ($opt['lang'] !== $lang)
+			return false;
+		if (!empty($opt['joins']))
+			return false;
 		if ($opt['limit']) {
 			if (!preg_match('/^[0-9]+(,[0-9+])?$/', $opt['limit']))
 				return false;
@@ -1059,7 +1045,7 @@ class Db extends Module
 	 * @param array $opt
 	 * @return array|bool
 	 */
-	private function select_cache($table, array $where = array(), array $opt = array())
+	private function select_cache(string $table, array $where = [], array $opt = [])
 	{
 		if (!isset($this->n_tables[$table . '-cache']))
 			$this->n_tables[$table . '-cache'] = 1;
@@ -1132,7 +1118,7 @@ class Db extends Module
 	/**
 	 * @param string $table
 	 */
-	private function changedTable($table)
+	private function changedTable(string $table)
 	{
 		if (in_array($table, $this->options['listCache']) and isset($this->cachedLists[$table]))
 			unset($this->cachedLists[$table]);
@@ -1148,7 +1134,7 @@ class Db extends Module
 	 * @param string $t
 	 * @return string
 	 */
-	private function makeSafe($t)
+	private function makeSafe(string $t): string
 	{
 		return preg_replace('/[^a-zA-Z0-9_.,()!=<> -]+/', '', $t);
 	}
@@ -1160,7 +1146,7 @@ class Db extends Module
 	 * @return string
 	 * @throws \Model\Core\Exception
 	 */
-	private function elaborateField($table, $k, array $opt = array())
+	private function elaborateField(string $table, string $k, array $opt = []): string
 	{
 		$options = array_merge(array('auto_ml' => false, 'main_alias' => false, 'joins' => array()), $opt);
 		$kr = '`' . $this->makeSafe($k) . '`';
@@ -1212,7 +1198,7 @@ class Db extends Module
 	 * @return string
 	 * @throws \Model\Core\Exception
 	 */
-	private function elaborateValue($v)
+	private function elaborateValue($v): string
 	{
 		if (is_object($v)) {
 			if (get_class($v) == 'DateTime')
@@ -1227,23 +1213,21 @@ class Db extends Module
 	/**
 	 * @param string $table
 	 * @param mixed $array
-	 * @param string $collante
+	 * @param string $glue
 	 * @param array $opt
 	 * @return string
 	 * @throws \Model\Core\Exception
 	 */
-	public function makeSqlString($table, $array, $collante, array $opt = array())
+	public function makeSqlString(string $table, $array, string $glue, array $opt = []): string
 	{
-		if (is_string($array)) {
+		if (is_string($array))
 			return $array;
-		}
-		if (!is_array($array)) {
+		if (!is_array($array))
 			$this->model->error('Can\t elaborate where string.');
-		}
 
-		$options = array_merge(array('for_where' => true, 'auto_ml' => false, 'main_alias' => false, 'joins' => array()), $opt);
+		$options = array_merge(['for_where' => true, 'auto_ml' => false, 'main_alias' => false, 'joins' => []], $opt);
 
-		$str = array();
+		$str = [];
 		foreach ($array as $k => $v) {
 			$alreadyParsed = false;
 
@@ -1335,7 +1319,7 @@ class Db extends Module
 				$str[] = $k . ' ' . $operator . ' ' . $v1;
 		}
 
-		return implode(' ' . $collante . ' ', $str);
+		return implode(' ' . $glue . ' ', $str);
 	}
 
 	/**
@@ -1343,7 +1327,7 @@ class Db extends Module
 	 * @param int $n
 	 * @return bool
 	 */
-	public function setQueryLimit($type, $n)
+	public function setQueryLimit(string $type, int $n): bool
 	{
 		switch ($type) {
 			case 'query':
@@ -1366,7 +1350,7 @@ class Db extends Module
 	 * @param string $table
 	 * @return Table|bool
 	 */
-	private function loadTable($table)
+	private function loadTable(string $table)
 	{
 		if (!isset($this->tables[$table])) {
 			if (file_exists(__DIR__ . '/data/' . $this->unique_id . '/' . $table . '.php')) {
@@ -1385,7 +1369,7 @@ class Db extends Module
 	 * @param array $data
 	 * @return array
 	 */
-	private function filterColumns($table, array $data)
+	private function filterColumns(string $table, array $data): array
 	{
 		$tableModel = $this->loadTable($table);
 
@@ -1430,7 +1414,7 @@ class Db extends Module
 	 * @param string $table
 	 * @return Table|bool
 	 */
-	public function getTable($table)
+	public function getTable(string $table)
 	{
 		$this->loadTable($table);
 		return $this->tables[$table];
@@ -1442,7 +1426,7 @@ class Db extends Module
 	 * @return int
 	 * @throws \Model\Core\Exception
 	 */
-	public function getVersionLock($table, $id)
+	public function getVersionLock(string $table, int $id): int
 	{
 		$version = $this->select('model_version_locks', [
 			'table' => $table,
