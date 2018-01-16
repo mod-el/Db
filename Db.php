@@ -52,7 +52,7 @@ class Db extends Module
 	 * @param array $options
 	 * @throws \Model\Core\Exception
 	 */
-	public function init($options)
+	public function init(array $options)
 	{
 		$this->options = array_merge($this->options, $options);
 

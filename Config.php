@@ -12,7 +12,7 @@ class Config extends Module_Config
 	 * @return bool
 	 * @throws \Model\Core\Exception
 	 */
-	public function makeCache()
+	public function makeCache(): bool
 	{
 		$path = INCLUDE_PATH . 'model' . DIRECTORY_SEPARATOR . 'Db' . DIRECTORY_SEPARATOR;
 
@@ -153,7 +153,7 @@ $foreign_keys = ' . var_export($foreign_keys, true) . ';
 	 * @param array $data
 	 * @return bool
 	 */
-	public function saveConfig($type, array $data)
+	public function saveConfig(string $type, array $data): bool
 	{
 		$config = $this->retrieveConfig();
 
@@ -205,7 +205,7 @@ $config = ' . var_export($config, true) . ';
 	 * @param array $data
 	 * @return bool
 	 */
-	public function install(array $data = [])
+	public function install(array $data = []): bool
 	{
 		if (!$this->saveConfig('install', $data))
 			return false;
@@ -236,7 +236,7 @@ $config = ' . var_export($config, true) . ';
 	 *
 	 * @return array
 	 */
-	public function getConfigData()
+	public function getConfigData(): array
 	{
 		$keys = [];
 
