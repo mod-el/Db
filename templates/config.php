@@ -5,7 +5,7 @@
 </style>
 
 <form action="?" method="post">
-	<?php csrfInput(); ?>
+	<?php $this->model->_CSRF->csrfInput(); ?>
 	<table id="cont-packages">
 		<tr style="color: #2693FF">
 			<td>
