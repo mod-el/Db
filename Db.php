@@ -525,12 +525,12 @@ class Db extends Module
 
 	/**
 	 * @param string $table
-	 * @param array|int $where
+	 * @param array $where
 	 * @param array $opt
 	 * @return mixed
 	 * @throws \Model\Core\Exception
 	 */
-	public function select_all(string $table, $where = [], array $opt = [])
+	public function select_all(string $table, array $where = [], array $opt = [])
 	{
 		$opt['multiple'] = true;
 		return $this->select($table, $where, $opt);
