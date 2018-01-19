@@ -5,6 +5,7 @@ use Model\Core\Module_Config;
 class Config extends Module_Config
 {
 	public $configurable = true;
+	public $hasCleanUp = true;
 
 	/**
 	 * Caches all the tables structure
@@ -262,6 +263,21 @@ $config = ' . var_export($config, true) . ';
 		return $keys;
 	}
 
+	/**
+	 * Deletes all the rows in model_version_locks older than 24 hours
+	 */
+	public function cleanUp()
+	{
+		$threshold = date_create();
+		$threshold->modify('-24 hours');
+		$this->model->_Db->delete('model_version_locks', [
+			'date' => ['<=', $threshold->format('Y-m-d H:i:s')],
+		]);
+	}
+
+	/**
+	 * @return bool
+	 */
 	public function postUpdate_1_3_0()
 	{
 		$this->model->_Db->query('CREATE TABLE IF NOT EXISTS `model_version_locks` (
