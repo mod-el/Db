@@ -7,6 +7,9 @@ class Config extends Module_Config
 	public $configurable = true;
 	public $hasCleanUp = true;
 
+	/**
+	 * @throws \Model\Core\Exception
+	 */
 	protected function assetsList()
 	{
 		$this->addAsset('config');
