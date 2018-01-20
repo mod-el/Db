@@ -7,6 +7,11 @@ class Config extends Module_Config
 	public $configurable = true;
 	public $hasCleanUp = true;
 
+	protected function assetsList()
+	{
+		$this->addAsset('config');
+	}
+
 	/**
 	 * Caches all the tables structure
 	 *
@@ -17,8 +22,6 @@ class Config extends Module_Config
 	{
 		$path = INCLUDE_PATH . 'model' . DIRECTORY_SEPARATOR . 'Db' . DIRECTORY_SEPARATOR;
 
-		if (!file_exists($path))
-			$this->model->error('DB module path does not exists!');
 		if (!is_writable($path))
 			$this->model->error('DB module path is not writable!');
 
