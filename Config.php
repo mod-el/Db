@@ -11,7 +11,7 @@ class Config extends Module_Config
 	 * Caches all the tables structure
 	 *
 	 * @return bool
-	 * @throws \Model\Core\Exception
+	 * @throws \Exception
 	 */
 	public function makeCache(): bool
 	{
@@ -153,6 +153,7 @@ $foreign_keys = ' . var_export($foreign_keys, true) . ';
 	 * @param string $type
 	 * @param array $data
 	 * @return bool
+	 * @throws \Exception
 	 */
 	public function saveConfig(string $type, array $data): bool
 	{
@@ -205,6 +206,7 @@ $config = ' . var_export($config, true) . ';
 	 *
 	 * @param array $data
 	 * @return bool
+	 * @throws \Exception
 	 */
 	public function install(array $data = []): bool
 	{
@@ -236,6 +238,7 @@ $config = ' . var_export($config, true) . ';
 	 * Gets the data for CLI configuration
 	 *
 	 * @return array
+	 * @throws \Exception
 	 */
 	public function getConfigData(): array
 	{
