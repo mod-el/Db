@@ -1134,7 +1134,7 @@ class Db extends Module
 	 * @param string $t
 	 * @return string
 	 */
-	private function makeSafe(string $t): string
+	public function makeSafe(string $t): string
 	{
 		return preg_replace('/[^a-zA-Z0-9_.,()!=<> -]+/', '', $t);
 	}
