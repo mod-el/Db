@@ -268,7 +268,7 @@ class Db extends Module
 			'options' => $options,
 		]);
 
-		$this->loadTable($table);
+		$this->getTable($table);
 		$data = $this->filterColumns($table, $data);
 		$this->checkDbData($table, $data['data'], $options);
 		if ($data['multilang']) {
@@ -373,7 +373,7 @@ class Db extends Module
 			'debug' => $this->options['debug'],
 		], $options);
 
-		$tableModel = $this->loadTable($table);
+		$tableModel = $this->getTable($table);
 		if (!is_array($where) and is_numeric($where))
 			$where = [$tableModel->primary => $where];
 
@@ -457,7 +457,7 @@ class Db extends Module
 		if (!is_array($data))
 			$this->model->error('Error while updating.', '<b>Error:</b> No data array was given!');
 
-		$tableModel = $this->loadTable($table);
+		$tableModel = $this->getTable($table);
 		if (!is_array($where) and is_numeric($where))
 			$where = [$tableModel->primary => $where];
 
@@ -482,7 +482,7 @@ class Db extends Module
 			'debug' => $this->options['debug'],
 		), $options);
 
-		$tableModel = $this->loadTable($table);
+		$tableModel = $this->getTable($table);
 		if (!is_array($where) and is_numeric($where))
 			$where = [$tableModel->primary => $where];
 
@@ -550,7 +550,7 @@ class Db extends Module
 		if (!is_array($opt))
 			$opt = ['field' => $opt];
 
-		$tableModel = $this->loadTable($table);
+		$tableModel = $this->getTable($table);
 		if (!is_array($where) and is_numeric($where))
 			$where = [$tableModel->primary => $where];
 
@@ -738,7 +738,7 @@ class Db extends Module
 		if ($where === false or $where === null)
 			return false;
 
-		$tableModel = $this->loadTable($table);
+		$tableModel = $this->getTable($table);
 		if (!is_array($where) and is_numeric($where))
 			$where = [$tableModel->primary => $where];
 
@@ -1051,7 +1051,7 @@ class Db extends Module
 	 */
 	private function select_cache(string $table, array $where = [], array $opt = [])
 	{
-		$tableModel = $this->loadTable($table);
+		$tableModel = $this->getTable($table);
 
 		if (!isset($this->n_tables[$table . '-cache']))
 			$this->n_tables[$table . '-cache'] = 1;
@@ -1354,33 +1354,13 @@ class Db extends Module
 
 	/**
 	 * @param string $table
-	 * @return Table
-	 * @throws \Model\Core\Exception
-	 */
-	private function loadTable(string $table): Table
-	{
-		if (!isset($this->tables[$table])) {
-			if (file_exists(__DIR__ . '/data/' . $this->unique_id . '/' . $table . '.php')) {
-				include(__DIR__ . '/data/' . $this->unique_id . '/' . $table . '.php');
-				if (!isset($foreign_keys))
-					$foreign_keys = array();
-				$this->tables[$table] = new Table($table_columns, $foreign_keys);
-			} else {
-				$this->model->error('Can\'t find table model for "' . entities($table) . '" in cache.');
-			}
-		}
-		return $this->tables[$table];
-	}
-
-	/**
-	 * @param string $table
 	 * @param array $data
 	 * @return array
 	 * @throws \Model\Core\Exception
 	 */
 	private function filterColumns(string $table, array $data): array
 	{
-		$tableModel = $this->loadTable($table);
+		$tableModel = $this->getTable($table);
 
 		$mainData = [];
 		foreach ($data as $k => $v) {
@@ -1426,7 +1406,16 @@ class Db extends Module
 	 */
 	public function getTable(string $table)
 	{
-		$this->loadTable($table);
+		if (!isset($this->tables[$table])) {
+			if (file_exists(__DIR__ . '/data/' . $this->unique_id . '/' . $table . '.php')) {
+				include(__DIR__ . '/data/' . $this->unique_id . '/' . $table . '.php');
+				if (!isset($foreign_keys))
+					$foreign_keys = array();
+				$this->tables[$table] = new Table($table_columns, $foreign_keys);
+			} else {
+				$this->model->error('Can\'t find table model for "' . entities($table) . '" in cache.');
+			}
+		}
 		return $this->tables[$table];
 	}
 
