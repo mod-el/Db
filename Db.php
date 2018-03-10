@@ -364,17 +364,18 @@ class Db extends Module
 	 */
 	public function update(string $table, $where, array $data = null, array $options = []): bool
 	{
-		if (!is_array($data)) {
+		if (!is_array($data))
 			$this->model->error('Error while updating.', '<b>Error:</b> No data array was given!');
-		}
-		if (!is_array($where) and is_numeric($where))
-			$where = ['id' => $where];
 
 		$options = array_merge([
 			'version' => null,
 			'confirm' => false,
 			'debug' => $this->options['debug'],
 		], $options);
+
+		$tableModel = $this->loadTable($table);
+		if (!is_array($where) and is_numeric($where))
+			$where = [$tableModel->primary => $where];
 
 		$this->trigger('update', [
 			'table' => $table,
@@ -383,7 +384,6 @@ class Db extends Module
 			'options' => $options,
 		]);
 
-		$this->loadTable($table);
 		$data = $this->filterColumns($table, $data);
 		$this->checkDbData($table, $data['data'], $options);
 		if ($data['multilang']) {
@@ -394,15 +394,15 @@ class Db extends Module
 			}
 		}
 
-		if ($options['version'] !== null and array_keys($where) === ['id']) {
-			$lastVersion = $this->getVersionLock($table, $where['id']);
+		if ($options['version'] !== null and array_keys($where) === [$tableModel->primary]) {
+			$lastVersion = $this->getVersionLock($table, $where[$tableModel->primary]);
 
 			if ($lastVersion > $options['version'])
 				$this->model->error('A new version of this element has been saved in the meanwhile. Reload the page and try again.');
 
 			$this->insert('model_version_locks', [
 				'table' => $table,
-				'row' => $where['id'],
+				'row' => $where[$tableModel->primary],
 				'version' => $options['version'] + 1,
 				'date' => date('Y-m-d H:i:s'),
 			]);
@@ -454,11 +454,12 @@ class Db extends Module
 	 */
 	public function updateOrInsert(string $table, $where, array $data = null, array $options = [])
 	{
-		if (!is_array($data)) {
+		if (!is_array($data))
 			$this->model->error('Error while updating.', '<b>Error:</b> No data array was given!');
-		}
+
+		$tableModel = $this->loadTable($table);
 		if (!is_array($where) and is_numeric($where))
-			$where = ['id' => $where];
+			$where = [$tableModel->primary => $where];
 
 		if ($this->count($table, $where) > 0) {
 			return $this->update($table, $where, $data, $options);
@@ -476,21 +477,20 @@ class Db extends Module
 	 */
 	public function delete(string $table, $where = [], array $options = []): bool
 	{
-		if (!is_array($where) and is_numeric($where)) {
-			$where = array('id' => $where);
-		}
 		$options = array_merge(array(
 			'confirm' => false,
 			'debug' => $this->options['debug'],
 		), $options);
+
+		$tableModel = $this->loadTable($table);
+		if (!is_array($where) and is_numeric($where))
+			$where = [$tableModel->primary => $where];
 
 		$this->trigger('delete', [
 			'table' => $table,
 			'where' => $where,
 			'options' => $options,
 		]);
-
-		$this->loadTable($table);
 
 		$where_str = $this->makeSqlString($table, $where, ' AND ');
 		$where_str = empty($where_str) ? '' : ' WHERE ' . $where_str;
@@ -547,10 +547,12 @@ class Db extends Module
 	{
 		if ($where === false or $where === null)
 			return false;
-		if (!is_array($where) and is_numeric($where))
-			$where = array('id' => $where);
 		if (!is_array($opt))
-			$opt = array('field' => $opt);
+			$opt = ['field' => $opt];
+
+		$tableModel = $this->loadTable($table);
+		if (!is_array($where) and is_numeric($where))
+			$where = [$tableModel->primary => $where];
 
 		$multilang = $this->model->isLoaded('Multilang') ? $this->model->getModule('Multilang') : false;
 		$auto_ml = ($multilang and array_key_exists($table, $multilang->tables)) ? true : false;
@@ -582,8 +584,6 @@ class Db extends Module
 			'where' => $where,
 			'options' => $options,
 		]);
-
-		$this->loadTable($table);
 
 		if (in_array($table, $this->options['listCache']) and !isset($opt['ignoreCache'])) {
 			if ($this->canUseCache($table, $where, $options)) {
@@ -737,8 +737,11 @@ class Db extends Module
 	{
 		if ($where === false or $where === null)
 			return false;
+
+		$tableModel = $this->loadTable($table);
 		if (!is_array($where) and is_numeric($where))
-			$where = ['id' => $where];
+			$where = [$tableModel->primary => $where];
+
 		$multilang = $this->model->isLoaded('Multilang') ? $this->model->getModule('Multilang') : false;
 		$auto_ml = ($multilang and array_key_exists($table, $multilang->tables)) ? true : false;
 		$lang = $multilang ? $multilang->lang : 'it';
@@ -1044,9 +1047,12 @@ class Db extends Module
 	 * @param array $where
 	 * @param array $opt
 	 * @return array|bool
+	 * @throws \Model\Core\Exception
 	 */
 	private function select_cache(string $table, array $where = [], array $opt = [])
 	{
+		$tableModel = $this->loadTable($table);
+
 		if (!isset($this->n_tables[$table . '-cache']))
 			$this->n_tables[$table . '-cache'] = 1;
 		else
@@ -1072,7 +1078,7 @@ class Db extends Module
 			}
 			if ($verified) {
 				if ($opt['multiple']) {
-					if (isset($row['id'])) $results[$row['id']] = $row;
+					if (isset($row[$tableModel->primary])) $results[$row[$tableModel->primary]] = $row;
 					else $results[] = $row;
 				} else {
 					if ($opt['field']) return $row[$opt['field']];
@@ -1134,7 +1140,7 @@ class Db extends Module
 	 * @param string $t
 	 * @return string
 	 */
-	private function makeSafe(string $t): string
+	public function makeSafe(string $t): string
 	{
 		return preg_replace('/[^a-zA-Z0-9_.,()!=<> -]+/', '', $t);
 	}
@@ -1348,9 +1354,10 @@ class Db extends Module
 
 	/**
 	 * @param string $table
-	 * @return Table|bool
+	 * @return Table
+	 * @throws \Model\Core\Exception
 	 */
-	private function loadTable(string $table)
+	private function loadTable(string $table): Table
 	{
 		if (!isset($this->tables[$table])) {
 			if (file_exists(__DIR__ . '/data/' . $this->unique_id . '/' . $table . '.php')) {
@@ -1358,8 +1365,9 @@ class Db extends Module
 				if (!isset($foreign_keys))
 					$foreign_keys = array();
 				$this->tables[$table] = new Table($table_columns, $foreign_keys);
-			} else
-				$this->tables[$table] = false;
+			} else {
+				$this->model->error('Can\'t find table model for "' . entities($table) . '" in cache.');
+			}
 		}
 		return $this->tables[$table];
 	}
@@ -1368,6 +1376,7 @@ class Db extends Module
 	 * @param string $table
 	 * @param array $data
 	 * @return array
+	 * @throws \Model\Core\Exception
 	 */
 	private function filterColumns(string $table, array $data): array
 	{
@@ -1413,6 +1422,7 @@ class Db extends Module
 	/**
 	 * @param string $table
 	 * @return Table|bool
+	 * @throws \Model\Core\Exception
 	 */
 	public function getTable(string $table)
 	{
