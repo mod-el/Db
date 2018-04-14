@@ -436,10 +436,12 @@ class Db extends Module
 
 				$result = $this->query($qry, $table, 'UPDATE', $options);
 				if ($result->rowCount() === 0 and isset($where[$tableModel->primary])) { // If there is no multilang row in the db, and I have the row id, I create one
-					$this->insert($multilangTable, array_merge($multilangData, [
+					$multilangWhere = [
 						$multilangOptions['keyfield'] => $where[$tableModel->primary],
 						$multilangOptions['lang'] => $lang,
-					]));
+					];
+					if ($this->count($multilangTable, $multilangWhere) === 0) // I actually check that the row does not exist (rowCount can return 0 if the updated data are identical to the existing ones)
+						$this->insert($multilangTable, array_merge($multilangData, $multilangWhere));
 				}
 			}
 
