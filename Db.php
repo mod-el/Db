@@ -429,12 +429,18 @@ class Db extends Module
 				$ml_where_str = ' WHERE `ml`.`' . $this->makeSafe($multilangOptions['lang']) . '` = ' . $this->db->quote($lang);
 				if ($where_str)
 					$ml_where_str .= ' AND (' . $where_str . ')';
-				$qry = 'UPDATE `' . $this->makeSafe($multilangTable) . '` AS `ml` INNER JOIN `' . $this->makeSafe($table) . '` AS `t` ON `t`.`id` = `ml`.`' . $this->makeSafe($multilangOptions['keyfield']) . '` SET ' . $this->makeSqlString($table, $multilangData, ',', ['for_where' => false, 'main_alias' => 'ml']) . $ml_where_str;
+				$qry = 'UPDATE `' . $this->makeSafe($multilangTable) . '` AS `ml` INNER JOIN `' . $this->makeSafe($table) . '` AS `t` ON `t`.`' . $tableModel->primary . '` = `ml`.`' . $this->makeSafe($multilangOptions['keyfield']) . '` SET ' . $this->makeSqlString($table, $multilangData, ',', ['for_where' => false, 'main_alias' => 'ml']) . $ml_where_str;
 
 				if ($options['debug'] and DEBUG_MODE)
 					echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
 
-				$this->query($qry, $table, 'UPDATE', $options);
+				$result = $this->query($qry, $table, 'UPDATE', $options);
+				if ($result->rowCount() === 0 and isset($where[$tableModel->primary])) { // If there is no multilang row in the db, and I have the row id, I create one
+					$this->insert($multilangTable, array_merge($multilangData, [
+						$multilangOptions['keyfield'] => $where[$tableModel->primary],
+						$multilangOptions['lang'] => $lang,
+					]));
+				}
 			}
 
 			$this->changedTable($table);
