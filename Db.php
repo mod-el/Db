@@ -945,13 +945,11 @@ class Db extends Module
 
 	/**
 	 * @param string $table
-	 * @param mixed $row
-	 * @return mixed
+	 * @param array $row
+	 * @return array
 	 */
-	private function normalizeTypesInSelect(string $table, $row)
+	private function normalizeTypesInSelect(string $table, array $row): array
 	{
-		if (!is_array($row))
-			return $row;
 		if (!isset($this->tables[$table]) or !$this->tables[$table])
 			return $row;
 
