@@ -581,7 +581,7 @@ class Db extends Module
 			'sum' => false,
 			'debug' => $this->options['debug'],
 			'return_query' => false,
-			'stream' => false,
+			'stream' => true,
 			'quick-cache' => true,
 		], $opt);
 		if ($options['multiple'] === false and $options['limit'] === false)
@@ -596,7 +596,7 @@ class Db extends Module
 		if (in_array($table, $this->options['listCache']) and !isset($opt['ignoreCache'])) {
 			if ($this->canUseCache($table, $where, $options)) {
 				if (!isset($this->cachedLists[$table]))
-					$this->cachedLists[$table] = $this->select_all($table, array(), array('ignoreCache' => true));
+					$this->cachedLists[$table] = $this->select_all($table, [], ['stream' => false, 'ignoreCache' => true]);
 				return $this->select_cache($table, $where, $options);
 			}
 		}
@@ -711,16 +711,14 @@ class Db extends Module
 			$return = $this->normalizeTypesInSelect($table, $return);
 			$return = $return[$options['field']];
 		} elseif ($options['multiple']) {
+			$results = $this->streamResults($table, $q);
 			if ($options['stream'])
-				return $q;
+				return $results;
 
-			$return = $q->fetchAll();
-			foreach ($return as $k => $riga)
-				$return[$k] = $this->normalizeTypesInSelect($table, $riga);
+			$return = [];
+			foreach ($results as $k => $r)
+				$return[$k] = $r;
 		} else {
-			if ($options['stream'])
-				return $q;
-
 			$return = $this->normalizeTypesInSelect($table, $q->fetch());
 		}
 
@@ -732,6 +730,12 @@ class Db extends Module
 		}
 
 		return $return;
+	}
+
+	private function streamResults(string $table, \PDOStatement $q): \Generator
+	{
+		foreach ($q as $r)
+			yield $this->normalizeTypesInSelect($table, $r);
 	}
 
 	/**
@@ -779,7 +783,7 @@ class Db extends Module
 		if (in_array($table, $this->options['listCache']) and !isset($opt['ignoreCache'])) {
 			if ($this->canUseCache($table, $where, $options)) {
 				if (!isset($this->cachedLists[$table]))
-					$this->cachedLists[$table] = $this->select_all($table, array(), array('ignoreCache' => true));
+					$this->cachedLists[$table] = $this->select_all($table, [], ['stream' => false, 'ignoreCache' => true]);
 				return count($this->select_cache($table, $where, $options));
 			}
 		}
