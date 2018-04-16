@@ -575,6 +575,7 @@ class Db extends Module
 			'group_by' => false,
 			'auto_ml' => $auto_ml,
 			'lang' => $lang,
+			'fallback' => true,
 			'joins' => [],
 			'field' => false,
 			'max' => false,
@@ -586,6 +587,8 @@ class Db extends Module
 		], $opt);
 		if ($options['multiple'] === false and $options['limit'] === false)
 			$options['limit'] = 1;
+
+		$isMultilang = ($multilang and $options['auto_ml'] and array_key_exists($table, $multilang->tables));
 
 		$this->trigger('select', [
 			'table' => $table,
@@ -603,18 +606,14 @@ class Db extends Module
 
 		$sel_str = '';
 		$join_str = '';
-		if ($multilang and $options['auto_ml'] and array_key_exists($table, $multilang->tables)) {
+		if ($isMultilang) {
 			$ml = $multilang->tables[$table];
 			foreach ($ml['fields'] as $nf => $f)
 				$ml['fields'][$nf] = 'lang.' . $f;
 			if ($ml['fields'])
 				$sel_str .= ',' . implode(',', $ml['fields']);
 
-			if ($multilang->options['fallback']) {
-				$join_str .= ' LEFT OUTER JOIN `' . $table . $ml['suffix'] . '` AS lang ON lang.`' . $this->makeSafe($ml['keyfield']) . '` = t.`id` AND lang.`' . $this->makeSafe($ml['lang']) . '` LIKE (CASE WHEN ' . $this->db->quote($options['lang']) . ' IN (SELECT `' . $this->makeSafe($ml['lang']) . '` FROM `' . $table . $ml['suffix'] . '` WHERE `' . $this->makeSafe($ml['keyfield']) . '` = t.`id`) THEN ' . $this->db->quote($options['lang']) . ' ELSE ' . $this->db->quote($multilang->options['fallback']) . ' END)';
-			} else {
-				$join_str .= ' LEFT OUTER JOIN `' . $table . $ml['suffix'] . '` AS lang ON lang.`' . $this->makeSafe($ml['keyfield']) . '` = t.`id` AND lang.`' . $this->makeSafe($ml['lang']) . '` LIKE ' . $this->db->quote($options['lang']);
-			}
+			$join_str .= ' LEFT OUTER JOIN `' . $table . $ml['suffix'] . '` AS lang ON lang.`' . $this->makeSafe($ml['keyfield']) . '` = t.`id` AND lang.`' . $this->makeSafe($ml['lang']) . '` LIKE ' . $this->db->quote($options['lang']);
 		}
 
 		$joins = $this->elaborateJoins($table, $options['joins']);
@@ -707,11 +706,11 @@ class Db extends Module
 		}
 
 		if ($options['field'] !== false or $options['max'] !== false or $options['sum'] !== false) {
-			$return = array($options['field'] => $q->fetchColumn());
+			$return = [$options['field'] => $q->fetchColumn()];
 			$return = $this->normalizeTypesInSelect($table, $return);
 			$return = $return[$options['field']];
 		} elseif ($options['multiple']) {
-			$results = $this->streamResults($table, $q);
+			$results = $this->streamResults($table, $where, $options, $q, $isMultilang);
 			if ($options['stream'])
 				return $results;
 
@@ -719,7 +718,12 @@ class Db extends Module
 			foreach ($results as $k => $r)
 				$return[$k] = $r;
 		} else {
-			$return = $this->normalizeTypesInSelect($table, $q->fetch());
+			$return = $q->fetch();
+			if ($return !== false) {
+				if ($isMultilang and $options['fallback'])
+					$return = $this->multilangFallback($table, $options, $return);
+				$return = $this->normalizeTypesInSelect($table, $return);
+			}
 		}
 
 		if ($options['quick-cache']) {
@@ -732,10 +736,82 @@ class Db extends Module
 		return $return;
 	}
 
-	private function streamResults(string $table, \PDOStatement $q): \Generator
+	/**
+	 * Streams the results via generator, applying necessary modifiers (multilang fallback and fields normalization)
+	 *
+	 * @param string $table
+	 * @param array $where
+	 * @param array $options
+	 * @param \PDOStatement $q
+	 * @param bool $isMultilang
+	 * @return \Generator
+	 */
+	private function streamResults(string $table, array $where = [], array $options = [], \PDOStatement $q, bool $isMultilang): \Generator
 	{
-		foreach ($q as $r)
-			yield $this->normalizeTypesInSelect($table, $r);
+		foreach ($q as $r) {
+			if ($isMultilang)
+				$r = $this->multilangFallback($table, $options, $r);
+			$data = $this->normalizeTypesInSelect($table, $r);
+			yield $data;
+		}
+	}
+
+	/**
+	 * @param string $table
+	 * @param array $options
+	 * @param array $data
+	 * @return array
+	 */
+	private function multilangFallback(string $table, array $options = [], array $data): array
+	{
+		if (!$this->model->_Multilang->options['fallback'] or !isset($this->model->_Multilang->tables[$table]))
+			return $data;
+
+		$mlTable = $this->model->_Multilang->tables[$table];
+
+		$tableModel = $this->getTable($table);
+		if (!isset($data[$tableModel->primary]))
+			return $data;
+
+		if ($this->checkIfValidForFallback($data, $mlTable))
+			return $data;
+
+		$where = [
+			$tableModel->primary => $data[$tableModel->primary],
+		];
+
+		foreach ($this->model->_Multilang->options['fallback'] as $l) {
+			if ($options['lang'] === $l)
+				continue;
+
+			$row = $this->select($table, $where, array_merge($options, [
+				'lang' => $l,
+				'multiple' => false,
+				'fallback' => false,
+				'stream' => false,
+			]));
+			if ($this->checkIfValidForFallback($row, $mlTable))
+				return $row;
+		}
+
+		return $data;
+	}
+
+	/**
+	 * @param array $data
+	 * @param array $mlTable
+	 * @return bool
+	 */
+	private function checkIfValidForFallback(array $data, array $mlTable): bool
+	{
+		$atLeastOne = false;
+		foreach ($mlTable['fields'] as $f) {
+			if (isset($data[$f]) and !empty($data[$f])) {
+				$atLeastOne = true;
+				break;
+			}
+		}
+		return $atLeastOne;
 	}
 
 	/**
