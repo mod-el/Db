@@ -790,7 +790,7 @@ class Db extends Module
 				'fallback' => false,
 				'stream' => false,
 			]));
-			if ($this->checkIfValidForFallback($row, $mlTable))
+			if ($row and $this->checkIfValidForFallback($row, $mlTable))
 				return $row;
 		}
 
