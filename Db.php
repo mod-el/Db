@@ -789,6 +789,7 @@ class Db extends Module
 				'multiple' => false,
 				'fallback' => false,
 				'stream' => false,
+				'limit' => 1,
 			]));
 			if ($row and $this->checkIfValidForFallback($row, $mlTable))
 				return $row;
