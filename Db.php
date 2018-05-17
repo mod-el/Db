@@ -1133,7 +1133,7 @@ class Db extends Module
 	 * @param string $table
 	 * @param array $where
 	 * @param array $opt
-	 * @return array|bool
+	 * @return array|\Generator|bool
 	 * @throws \Model\Core\Exception
 	 */
 	private function select_cache(string $table, array $where = [], array $opt = [])
@@ -1199,13 +1199,30 @@ class Db extends Module
 				});
 			}
 			if ($opt['limit']) {
-				if (is_numeric($opt['limit'])) return array_slice($results, 0, $opt['limit']);
-				else {
+				if (is_numeric($opt['limit'])) {
+					$return = array_slice($results, 0, $opt['limit']);
+				} else {
 					$limit = explode(',', $opt['limit']);
-					return array_slice($results, $limit[0], $limit[1]);
+					$return = array_slice($results, $limit[0], $limit[1]);
 				}
-			} else return $results;
-		} else return false;
+			} else {
+				$return = $results;
+			}
+
+			if (isset($opt['stream']) and $opt['stream']) {
+				return $this->streamCacheResults($return);
+			} else {
+				return $return;
+			}
+		} else {
+			return false;
+		}
+	}
+
+	private function streamCacheResults(array $results): \Generator
+	{
+		foreach ($results as $r)
+			yield $r;
 	}
 
 	/**
