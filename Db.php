@@ -578,6 +578,7 @@ class Db extends Module
 			'fallback' => true,
 			'joins' => [],
 			'field' => false,
+			'fields' => [],
 			'max' => false,
 			'sum' => false,
 			'debug' => $this->options['debug'],
@@ -669,6 +670,11 @@ class Db extends Module
 			$qry .= 'SUM(' . $this->elaborateField($table, $options['sum'], $make_options) . ')';
 		} elseif ($options['field'] !== false) {
 			$qry .= $this->elaborateField($table, $options['field'], $make_options);
+		} elseif ($options['fields']) {
+			$fields = [];
+			foreach ($options['fields'] as $f)
+				$fields[] = $this->elaborateField($table, $f, $make_options);
+			$qry .= implode(',', $fields);
 		} else {
 			$qry .= 't.*' . $sel_str;
 		}
