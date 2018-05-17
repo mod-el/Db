@@ -1,8 +1,6 @@
 {
 	"name": "Db",
 	"description": "Abstraction layer for DB management (via PDO)",
-	"version": "1.4.0",
-	"dependencies": {
-		"CSRF": ">=0.1.0"
-	}
+	"version": "1.4.1",
+	"dependencies": {}
 }
