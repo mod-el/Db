@@ -948,6 +948,64 @@ class Db extends Module
 		return $return;
 	}
 
+	/**
+	 * Given a multilang table and an id, returns all multilang rows for that row
+	 * If no id is provided, returns a list of fields set to null
+	 *
+	 * @param string $table
+	 * @param int|null $id
+	 * @return array
+	 */
+	public function getMultilangTexts(string $table, int $id = null): array
+	{
+		if (!$this->model->isLoaded('Multilang'))
+			return [];
+
+		$languageVersions = [];
+		foreach ($this->model->_Multilang->langs as $l)
+			$languageVersions[$l] = [];
+
+		$tableModel = $this->getTable($table);
+		if ($tableModel) {
+			$columns = $tableModel->columns;
+
+			if (array_key_exists($table, $this->model->_Multilang->tables)) {
+				$multilangTable = $table . $this->model->_Multilang->tables[$table]['suffix'];
+				$multilangTableModel = $this->getTable($multilangTable);
+				foreach ($this->model->_Multilang->tables[$table]['fields'] as $ml) {
+					$columns[$ml] = $multilangTableModel->columns[$ml];
+					$multilangColumns[] = $ml;
+				}
+
+				$langColumn = $this->model->_Multilang->tables[$table]['lang'];
+
+				$fieldsToExtract = $multilangColumns;
+				$fieldsToExtract[] = $langColumn;
+
+				if ($id) {
+					$languageVersionsQ = $this->select_all($multilangTable, [
+						$this->model->_Multilang->tables[$table]['keyfield'] => $id,
+					], [
+						'fields' => $fieldsToExtract,
+						'fallback' => false,
+					]);
+					foreach ($languageVersionsQ as $r) {
+						$lang = $r[$langColumn];
+						unset($r[$langColumn]);
+						$languageVersions[$lang] = $r;
+					}
+				} else {
+					foreach ($languageVersions as $lang => $l_arr) {
+						foreach ($this->model->_Multilang->tables[$table]['fields'] as $f)
+							$languageVersions[$lang][$f] = null;
+					}
+				}
+			}
+		}
+
+		return $languageVersions;
+	}
+
 	/* Utilites for CRUD methods */
 
 	/**
@@ -1225,6 +1283,10 @@ class Db extends Module
 		}
 	}
 
+	/**
+	 * @param array $results
+	 * @return \Generator
+	 */
 	private function streamCacheResults(array $results): \Generator
 	{
 		foreach ($results as $r)
