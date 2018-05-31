@@ -994,6 +994,13 @@ class Db extends Module
 						unset($r[$langColumn]);
 						$languageVersions[$lang] = $r;
 					}
+
+					foreach ($languageVersions as $l => &$r) {
+						foreach ($multilangColumns as $k) {
+							if (!array_key_exists($k, $r))
+								$r[$k] = null;
+						}
+					}
 				} else {
 					foreach ($languageVersions as $lang => $l_arr) {
 						foreach ($this->model->_Multilang->tables[$table]['fields'] as $f)
