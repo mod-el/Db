@@ -573,6 +573,7 @@ class Db extends Module
 			'limit' => false,
 			'order_by' => false,
 			'group_by' => false,
+			'having' => [],
 			'auto_ml' => $auto_ml,
 			'lang' => $lang,
 			'fallback' => true,
@@ -680,9 +681,15 @@ class Db extends Module
 		}
 
 		$qry .= ' FROM `' . $this->makeSafe($table) . '` t' . $join_str . $where_str;
-		if ($options['group_by'] != false) $qry .= ' GROUP BY ' . ($options['group_by']);
-		if ($options['order_by'] != false) $qry .= ' ORDER BY ' . ($options['order_by']);
-		if ($options['limit'] != false) $qry .= ' LIMIT ' . ($options['limit']);
+		if ($options['group_by']) {
+			$qry .= ' GROUP BY ' . ($options['group_by']);
+			if ($options['having'])
+				$qry .= ' HAVING ' . $this->makeSqlString($table, $options['having'], ' AND ', $make_options);
+		}
+		if ($options['order_by'])
+			$qry .= ' ORDER BY ' . ($options['order_by']);
+		if ($options['limit'] !== false)
+			$qry .= ' LIMIT ' . ($options['limit']);
 
 		if ($options['return_query'])
 			return $qry;
