@@ -587,7 +587,7 @@ class Db extends Module
 			'stream' => true,
 			'quick-cache' => true,
 		], $opt);
-		if ($options['multiple'] === false and $options['limit'] === false)
+		if ($options['multiple'] === false and !$options['limit'])
 			$options['limit'] = 1;
 
 		$isMultilang = ($multilang and $options['auto_ml'] and array_key_exists($table, $multilang->tables));
@@ -688,7 +688,7 @@ class Db extends Module
 		}
 		if ($options['order_by'])
 			$qry .= ' ORDER BY ' . ($options['order_by']);
-		if ($options['limit'] !== false)
+		if ($options['limit'])
 			$qry .= ' LIMIT ' . ($options['limit']);
 
 		if ($options['return_query'])
