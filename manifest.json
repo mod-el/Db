@@ -1,6 +1,6 @@
 {
 	"name": "Db",
 	"description": "Abstraction layer for DB management (via PDO)",
-	"version": "1.4.4",
+	"version": "1.4.5",
 	"dependencies": {}
 }
