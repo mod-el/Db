@@ -580,8 +580,9 @@ class Db extends Module
 			'joins' => [],
 			'field' => false,
 			'fields' => [],
-			'max' => false,
-			'sum' => false,
+			'only-aggregates' => false,
+			'max' => [],
+			'sum' => [],
 			'debug' => $this->options['debug'],
 			'return_query' => false,
 			'stream' => true,
@@ -654,7 +655,7 @@ class Db extends Module
 			$cj++;
 		}
 
-		$make_options = array('auto_ml' => $options['auto_ml'], 'main_alias' => 't', 'joins' => $joins);
+		$make_options = ['auto_ml' => $options['auto_ml'], 'main_alias' => 't', 'joins' => $joins];
 		$where_str = $this->makeSqlString($table, $where, ' ' . $options['operator'] . ' ', $make_options);
 		if (in_array($table, $this->options['autoHide']))
 			$where_str = empty($where_str) ? 't.zk_deleted = 0' : '(' . $where_str . ') AND t.zk_deleted = 0';
@@ -665,19 +666,48 @@ class Db extends Module
 		else
 			$qry = 'SELECT ';
 
-		if ($options['max'] !== false) {
-			$qry .= 'MAX(' . $this->elaborateField($table, $options['max'], $make_options) . ')';
-		} elseif ($options['sum'] !== false) {
-			$qry .= 'SUM(' . $this->elaborateField($table, $options['sum'], $make_options) . ')';
-		} elseif ($options['field'] !== false) {
-			$qry .= $this->elaborateField($table, $options['field'], $make_options);
-		} elseif ($options['fields']) {
-			$fields = [];
-			foreach ($options['fields'] as $f)
-				$fields[] = $this->elaborateField($table, $f, $make_options);
-			$qry .= implode(',', $fields);
-		} else {
-			$qry .= 't.*' . $sel_str;
+		$singleField = false;
+
+		$aggregateFunctions = [
+			'max',
+			'sum',
+		];
+
+		$found = false;
+		foreach ($aggregateFunctions as $f) {
+			if ($options[$f]) {
+				if (is_array($options[$f])) {
+					if (!$found and !$options['only-aggregates'])
+						$qry .= 't.*' . $sel_str;
+
+					foreach ($options[$f] as $field) {
+						if ($found or !$options['only-aggregates'])
+							$qry .= ',';
+						$qry .= strtoupper($f) . '(' . $this->elaborateField($table, $field, $make_options) . ') AS ' . $this->elaborateField($table, $field, array_merge($make_options, ['add-alias' => false]));
+					}
+
+					$found = true;
+				} else {
+					$qry .= strtoupper($f) . '(' . $this->elaborateField($table, $options[$f], $make_options) . ')';
+					$singleField = true;
+					$found = true;
+					break;
+				}
+			}
+		}
+
+		if (!$found) {
+			if ($options['field'] !== false) {
+				$singleField = true;
+				$qry .= $this->elaborateField($table, $options['field'], $make_options);
+			} elseif ($options['fields']) {
+				$fields = [];
+				foreach ($options['fields'] as $f)
+					$fields[] = $this->elaborateField($table, $f, $make_options);
+				$qry .= implode(',', $fields);
+			} else {
+				$qry .= 't.*' . $sel_str;
+			}
 		}
 
 		$qry .= ' FROM `' . $this->makeSafe($table) . '` t' . $join_str . $where_str;
@@ -698,7 +728,7 @@ class Db extends Module
 			echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
 
 		if ($options['quick-cache']) {
-			$cacheKey = md5($qry . ((string)$options['field']) . ((string)$options['max']) . ((string)$options['sum']) . ((int)$options['multiple']));
+			$cacheKey = md5($qry . ((string)$options['field']) . json_encode($options['max']) . json_encode($options['sum']) . ((int)$options['multiple']));
 			if (isset($this->queryCache[$table][$cacheKey])) {
 				if ($this->queryCache[$table][$cacheKey]['query'] == $qry)
 					return $this->queryCache[$table][$cacheKey]['res'];
@@ -718,7 +748,7 @@ class Db extends Module
 			$this->model->error('Error while reading.', '<b>Errore:</b> ' . getErr($e) . '<br /><b>Query:</b> ' . $qry);
 		}
 
-		if ($options['field'] !== false or $options['max'] !== false or $options['sum'] !== false) {
+		if ($singleField) {
 			$return = [$options['field'] => $q->fetchColumn()];
 			$return = $this->normalizeTypesInSelect($table, $return);
 			$return = $return[$options['field']];
@@ -1340,7 +1370,12 @@ class Db extends Module
 	 */
 	private function elaborateField(string $table, string $k, array $opt = []): string
 	{
-		$options = array_merge(array('auto_ml' => false, 'main_alias' => false, 'joins' => array()), $opt);
+		$options = array_merge([
+			'auto_ml' => false,
+			'main_alias' => false,
+			'joins' => [],
+			'add-alias' => true,
+		], $opt);
 		$kr = '`' . $this->makeSafe($k) . '`';
 
 		$multilang = $this->model->isLoaded('Multilang') ? $this->model->getModule('Multilang') : false;
@@ -1381,6 +1416,14 @@ class Db extends Module
 
 		if (!$changed and $options['main_alias'])
 			$kr = $options['main_alias'] . '.' . $kr;
+
+		if (!$options['add-alias']) {
+			$kr = explode('.', $kr);
+			if (count($kr) > 1) {
+				unset($kr[0]);
+				$kr = implode(',', $kr);
+			}
+		}
 
 		return $kr;
 	}
