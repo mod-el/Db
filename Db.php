@@ -581,8 +581,11 @@ class Db extends Module
 			'field' => false,
 			'fields' => [],
 			'only-aggregates' => false,
+			'min' => [],
 			'max' => [],
 			'sum' => [],
+			'avg' => [],
+			'count' => [],
 			'debug' => $this->options['debug'],
 			'return_query' => false,
 			'stream' => true,
@@ -669,8 +672,11 @@ class Db extends Module
 		$singleField = false;
 
 		$aggregateFunctions = [
+			'min',
 			'max',
 			'sum',
+			'avg',
+			'count',
 		];
 
 		$found = false;
