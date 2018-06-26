@@ -82,47 +82,49 @@ class Config extends Module_Config
 				}
 
 				/*** FOREIGN KEYS ***/
+				$foreign_keys = [];
 				$create = $db->query('SHOW CREATE TABLE `' . $table . '`')->fetch();
-				$create = $create['Create Table'];
-				$righe_query = explode("\n", str_replace("\r", '', $create));
-				$foreign_keys = array();
-				foreach ($righe_query as $r) {
-					$r = trim($r);
-					if (substr($r, 0, 10) == 'CONSTRAINT') {
-						preg_match_all('/CONSTRAINT `(.+?)` FOREIGN KEY \(`(.+?)`\) REFERENCES `(.+?)` \(`(.+?)`\)/i', $r, $matches, PREG_SET_ORDER);
+				if ($create and isset($create['Create Table'])) {
+					$create = $create['Create Table'];
+					$righe_query = explode("\n", str_replace("\r", '', $create));
+					foreach ($righe_query as $r) {
+						$r = trim($r);
+						if (substr($r, 0, 10) == 'CONSTRAINT') {
+							preg_match_all('/CONSTRAINT `(.+?)` FOREIGN KEY \(`(.+?)`\) REFERENCES `(.+?)` \(`(.+?)`\)/i', $r, $matches, PREG_SET_ORDER);
 
-						if (count($matches[0]) != 5)
-							continue;
-						$fk = $matches[0];
+							if (count($matches[0]) != 5)
+								continue;
+							$fk = $matches[0];
 
-						if (!isset($columns[$fk[2]]))
-							echo '<b>Warning:</b> something is wrong, column ' . $fk[2] . ', declared in foreign key ' . $fk[1] . ' doesn\'t seem to exist!<br />';
-						$columns[$fk[2]]['foreign_key'] = $fk[1];
+							if (!isset($columns[$fk[2]]))
+								echo '<b>Warning:</b> something is wrong, column ' . $fk[2] . ', declared in foreign key ' . $fk[1] . ' doesn\'t seem to exist!<br />';
+							$columns[$fk[2]]['foreign_key'] = $fk[1];
 
-						$on_update = 'RESTRICT';
-						if (preg_match('/ON UPDATE (NOT NULL|DELETE|CASCADE|NO ACTION)/i', $r, $upd_match))
-							$on_update = $upd_match[1];
+							$on_update = 'RESTRICT';
+							if (preg_match('/ON UPDATE (NOT NULL|DELETE|CASCADE|NO ACTION)/i', $r, $upd_match))
+								$on_update = $upd_match[1];
 
-						$on_delete = 'RESTRICT';
-						if (preg_match('/ON DELETE (NOT NULL|DELETE|CASCADE|NO ACTION)/i', $r, $del_match))
-							$on_delete = $del_match[1];
+							$on_delete = 'RESTRICT';
+							if (preg_match('/ON DELETE (NOT NULL|DELETE|CASCADE|NO ACTION)/i', $r, $del_match))
+								$on_delete = $del_match[1];
 
-						$foreign_keys[$fk[1]] = array(
-							'column' => $fk[2],
-							'ref_table' => $fk[3],
-							'ref_column' => $fk[4],
-							'update' => $on_update,
-							'delete' => $on_delete,
-						);
+							$foreign_keys[$fk[1]] = array(
+								'column' => $fk[2],
+								'ref_table' => $fk[3],
+								'ref_column' => $fk[4],
+								'update' => $on_update,
+								'delete' => $on_delete,
+							);
 
-						if (!isset($references[$fk[3]]))
-							$references[$fk[3]] = array();
-						$references[$fk[3]][] = array(
-							'table' => $table,
-							'fk_column' => $fk[2],
-							'column' => $fk[4],
-							'fk' => $fk[1],
-						);
+							if (!isset($references[$fk[3]]))
+								$references[$fk[3]] = array();
+							$references[$fk[3]][] = array(
+								'table' => $table,
+								'fk_column' => $fk[2],
+								'column' => $fk[4],
+								'fk' => $fk[1],
+							);
+						}
 					}
 				}
 
