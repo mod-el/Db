@@ -689,7 +689,7 @@ class Db extends Module
 					foreach ($options[$f] as $field) {
 						if ($found or !$options['only-aggregates'])
 							$qry .= ',';
-						$qry .= strtoupper($f) . '(' . $this->elaborateField($table, $field, $make_options) . ') AS ' . $this->elaborateField($table, $field, array_merge($make_options, ['add-alias' => false]));
+						$qry .= strtoupper($f) . '(' . $this->elaborateField($table, $field, $make_options) . ') AS ' . $this->elaborateField($table, 'zkaggr_' . $field, array_merge($make_options, ['add-alias' => false]));
 					}
 
 					$found = true;
@@ -720,7 +720,7 @@ class Db extends Module
 		if ($options['group_by']) {
 			$qry .= ' GROUP BY ' . ($options['group_by']);
 			if ($options['having'])
-				$qry .= ' HAVING ' . $this->makeSqlString($table, $options['having'], ' AND ', $make_options);
+				$qry .= ' HAVING ' . $this->makeSqlString($table, $options['having'], ' AND ', array_merge($make_options, ['add-alias' => false, 'prefix' => 'zkaggr_']));
 		}
 		if ($options['order_by'])
 			$qry .= ' ORDER BY ' . ($options['order_by']);
@@ -1068,17 +1068,24 @@ class Db extends Module
 		if (!isset($this->tables[$table]) or !$this->tables[$table])
 			return $row;
 
+		$newRow = [];
 		foreach ($row as $k => $v) {
-			if ($v === null or $v === false)
-				continue;
-			if (array_key_exists($k, $this->tables[$table]->columns)) {
-				if (in_array($this->tables[$table]->columns[$k]['type'], ['double', 'float', 'decimal']))
-					$row[$k] = (float)$v;
-				if (in_array($this->tables[$table]->columns[$k]['type'], ['tinyint', 'smallint', 'mediumint', 'int', 'bigint', 'year']))
-					$row[$k] = (int)$v;
+			if (strpos($k, 'zkaggr_') === 0) // Remove aggregates prefix
+				$k = substr($k, 7);
+
+			if ($v !== null and $v !== false) {
+				if (array_key_exists($k, $this->tables[$table]->columns)) {
+					if (in_array($this->tables[$table]->columns[$k]['type'], ['double', 'float', 'decimal']))
+						$v = (float)$v;
+					if (in_array($this->tables[$table]->columns[$k]['type'], ['tinyint', 'smallint', 'mediumint', 'int', 'bigint', 'year']))
+						$v = (int)$v;
+				}
 			}
+
+			$newRow[$k] = $v;
 		}
-		return $row;
+
+		return $newRow;
 	}
 
 	/**
@@ -1455,18 +1462,24 @@ class Db extends Module
 	 * @param string $table
 	 * @param mixed $array
 	 * @param string $glue
-	 * @param array $opt
+	 * @param array $options
 	 * @return string
 	 * @throws \Model\Core\Exception
 	 */
-	public function makeSqlString(string $table, $array, string $glue, array $opt = []): string
+	public function makeSqlString(string $table, $array, string $glue, array $options = []): string
 	{
 		if (is_string($array))
 			return $array;
 		if (!is_array($array))
 			$this->model->error('Can\t elaborate where string.');
 
-		$options = array_merge(['for_where' => true, 'auto_ml' => false, 'main_alias' => false, 'joins' => []], $opt);
+		$options = array_merge([
+			'for_where' => true,
+			'auto_ml' => false,
+			'main_alias' => false,
+			'joins' => [],
+			'prefix' => null,
+		], $options);
 
 		$str = [];
 		foreach ($array as $k => $v) {
@@ -1537,6 +1550,8 @@ class Db extends Module
 				}
 			}
 
+			if ($options['prefix'])
+				$k = $options['prefix'] . $k;
 			$k = $this->elaborateField($table, $k, $options);
 
 			if (!$alreadyParsed) {
