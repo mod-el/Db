@@ -48,6 +48,9 @@ class Db extends Module
 	/** @var array */
 	protected $queryCache = array();
 
+	/** @var array */
+	protected $deferedInserts = [];
+
 	/**
 	 * @param array $options
 	 * @throws \Model\Core\Exception
@@ -252,15 +255,16 @@ class Db extends Module
 	 * @param string $table
 	 * @param array $data
 	 * @param array $options
-	 * @return int
+	 * @return int|null
 	 * @throws \Model\Core\Exception
 	 */
-	public function insert(string $table, array $data = [], array $options = []): int
+	public function insert(string $table, array $data = [], array $options = []): ?int
 	{
-		$options = array_merge(array(
+		$options = array_merge([
 			'replace' => false,
+			'defer' => null,
 			'debug' => $this->options['debug'],
-		), $options);
+		], $options);
 
 		$this->trigger('insert', [
 			'table' => $table,
@@ -279,8 +283,37 @@ class Db extends Module
 			}
 		}
 
+		if ($options['defer'] !== null) {
+			if ($data['multilang'])
+				$this->model->error('Cannot defer inserts with multilang fields');
+
+			if ($options['defer'] === true)
+				$options['defer'] = 0;
+			if (!is_numeric($options['defer']))
+				$this->model->error('Invalid defer value');
+			$options['defer'] = (int)$options['defer'];
+
+			if (!isset($this->deferedInserts[$table])) {
+				$this->deferedInserts[$table] = [
+					'options' => $options,
+					'rows' => [],
+				];
+			}
+
+			if ($this->deferedInserts[$table]['options'] !== $options)
+				$this->model->error('Cannot defer inserts with different options on the same table');
+
+			$this->deferedInserts[$table]['rows'][] = $data['data'];
+			if ($options['defer'] > 0 and count($this->deferedInserts[$table]['rows']) === $options['defer'])
+				$this->bulkInsert($table);
+
+			return null;
+		}
+
 		try {
-			$qry = $this->makeQueryForInsert($table, $data['data'], $options);
+			$qry = $this->makeQueryForInsert($table, [$data['data']], $options);
+			if (!$qry)
+				$this->model->error('Error while generating query for insert');
 
 			if ($options['debug'] and DEBUG_MODE)
 				echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
@@ -291,7 +324,9 @@ class Db extends Module
 				$multilangData[$multilangOptions['keyfield']] = $id;
 				$multilangData[$multilangOptions['lang']] = $lang;
 
-				$qry = $this->makeQueryForInsert($multilangTable, $multilangData, $options);
+				$qry = $this->makeQueryForInsert($multilangTable, [$multilangData], $options);
+				if (!$qry)
+					$this->model->error('Error while generating query for multilang insert');
 
 				if ($options['debug'] and DEBUG_MODE)
 					echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
@@ -308,7 +343,41 @@ class Db extends Module
 
 			return $id;
 		} catch (\Exception $e) {
-			$this->model->error('Error while inserting.', '<b>Error:</b> ' . getErr($e) . '<br /><b>Query:</b> ' . $qry);
+			$this->model->error('Error while inserting.', '<b>Error:</b> ' . getErr($e) . '<br /><b>Query:</b> ' . ($qry ?? 'Still undefined'));
+		}
+	}
+
+	/**
+	 * @param string $table
+	 */
+	public function bulkInsert(string $table)
+	{
+		if (!isset($this->deferedInserts[$table]))
+			return;
+
+		try {
+			$options = $this->deferedInserts[$table]['options'];
+
+			$qry = $this->makeQueryForInsert($table, $this->deferedInserts[$table]['rows'], $options);
+			if ($qry) {
+				$this->trigger('bulk-insert', [
+					'table' => $table,
+					'options' => $options,
+				]);
+
+				$this->query($qry, $table, 'INSERT', $options);
+
+				$this->changedTable($table);
+			} else {
+				$this->trigger('empty-bulk-insert', [
+					'table' => $table,
+					'options' => $options,
+				]);
+			}
+
+			unset($this->deferedInserts[$table]);
+		} catch (\Exception $e) {
+			$this->model->error('Error while bulk inserting.', '<b>Error:</b> ' . getErr($e), ['details' => '<b>Query:</b> ' . ($qry ?? 'Still undefined')]);
 		}
 	}
 
@@ -316,39 +385,60 @@ class Db extends Module
 	 * Builds a query for the insert method
 	 *
 	 * @param string $table
-	 * @param array $data
+	 * @param array $rows
 	 * @param array $options
-	 * @return string
+	 * @return string|null
 	 * @throws \Model\Core\Exception
 	 */
-	private function makeQueryForInsert(string $table, array $data, array $options): string
+	private function makeQueryForInsert(string $table, array $rows, array $options): ?string
 	{
 		$qry_init = $options['replace'] ? 'REPLACE' : 'INSERT';
 
-		if ($data === []) {
-			$tableModel = $this->getTable($table);
-			$arrIns = [];
-			foreach ($tableModel->columns as $k => $c) {
-				if ($c['null']) {
-					$arrIns[] = 'NULL';
-				} else {
-					if ($c['key'] == 'PRI')
-						$arrIns[] = 'NULL';
-					else
-						$arrIns[] = '\'\'';
-				}
-			}
-			$qry = $qry_init . ' INTO `' . $this->makeSafe($table) . '` VALUES(' . implode(',', $arrIns) . ')';
-		} else {
-			$keys = [];
-			$values = [];
-			foreach ($data as $k => $v) {
-				$keys[] = $this->elaborateField($table, $k);
-				if ($v === null) $values[] = 'NULL';
-				else $values[] = $this->elaborateValue($v);
-			}
+		$keys = [];
+		$keys_set = false;
+		$defaults = null;
+		$qry_rows = [];
 
-			$qry = $qry_init . ' INTO `' . $this->makeSafe($table) . '`(' . implode(',', $keys) . ') VALUES(' . implode(',', $values) . ')';
+		foreach ($rows as $data) {
+			if ($data === []) {
+				if ($defaults === null) {
+					$tableModel = $this->getTable($table);
+					foreach ($tableModel->columns as $k => $c) {
+						if ($c['null']) {
+							$defaults[] = 'NULL';
+						} else {
+							if ($c['key'] == 'PRI')
+								$defaults[] = 'NULL';
+							else
+								$defaults[] = '\'\'';
+						}
+					}
+				}
+				$qry_rows[] = '(' . implode(',', $defaults) . ')';
+			} else {
+				$values = [];
+				foreach ($data as $k => $v) {
+					if (!$keys_set)
+						$keys[] = $this->elaborateField($table, $k);
+
+					if ($v === null)
+						$values[] = 'NULL';
+					else
+						$values[] = $this->elaborateValue($v);
+				}
+				$keys_set = true;
+
+				$qry_rows[] = '(' . implode(',', $values) . ')';
+			}
+		}
+
+		$qry = null;
+		if (count($qry_rows) > 0) {
+			if ($keys_set) {
+				$qry = $qry_init . ' INTO `' . $this->makeSafe($table) . '`(' . implode(',', $keys) . ') VALUES' . implode(',', $qry_rows);
+			} else {
+				$qry = $qry_init . ' INTO `' . $this->makeSafe($table) . '` VALUES' . implode(',', $qry_rows);
+			}
 		}
 
 		return $qry;
@@ -372,6 +462,9 @@ class Db extends Module
 			'confirm' => false,
 			'debug' => $this->options['debug'],
 		], $options);
+
+		if (isset($this->deferedInserts[$table]))
+			$this->model->error('There are open bulk inserts on the table ' . $table . '; can\'t update');
 
 		$tableModel = $this->getTable($table);
 		if (!is_array($where) and is_numeric($where))
@@ -490,6 +583,9 @@ class Db extends Module
 			'debug' => $this->options['debug'],
 		), $options);
 
+		if (isset($this->deferedInserts[$table]))
+			$this->model->error('There are open bulk inserts on the table ' . $table . '; can\'t delete');
+
 		$tableModel = $this->getTable($table);
 		if (!is_array($where) and is_numeric($where))
 			$where = [$tableModel->primary => $where];
@@ -555,6 +651,8 @@ class Db extends Module
 	{
 		if ($where === false or $where === null)
 			return false;
+		if (isset($this->deferedInserts[$table]))
+			$this->model->error('There are open bulk inserts on the table ' . $table . '; can\'t read');
 		if (!is_array($opt))
 			$opt = ['field' => $opt];
 
