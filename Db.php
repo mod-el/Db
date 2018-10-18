@@ -11,26 +11,26 @@ class Db extends Module
 	/** @var \PDO */
 	protected $db;
 	/** @var array */
-	protected $tables = array();
+	protected $tables = [];
 
 	/** @var int */
 	public $n_query = 0;
 	/** @var int */
 	public $n_prepared = 0;
 	/** @var array */
-	public $n_tables = array();
+	public $n_tables = [];
 
 	/** @var int */
 	protected $c_transactions = 0;
 
 	/** @var array */
-	protected $querylimit_counter = array(
-		'query' => array(),
-		'table' => array()
-	);
+	protected $querylimit_counter = [
+		'query' => [],
+		'table' => []
+	];
 
 	/** @var array */
-	protected $options = array(
+	protected $options = [
 		'db' => 'primary',
 		'listCache' => [],
 		'autoHide' => [],
@@ -41,12 +41,12 @@ class Db extends Module
 		'use_buffered_query' => true,
 		'emulate_prepares' => false,
 		'local_infile' => true,
-	);
+	];
 
 	/** @var array */
-	protected $cachedLists = array();
+	protected $cachedLists = [];
 	/** @var array */
-	protected $queryCache = array();
+	protected $queryCache = [];
 
 	/** @var array */
 	protected $deferedInserts = [];
@@ -90,7 +90,7 @@ class Db extends Module
 			$this->model->error('Error while connecting to database: ' . $e->getMessage());
 		}
 
-		$this->methods = array(
+		$this->methods = [
 			'query',
 			'insert',
 			'update',
@@ -101,7 +101,7 @@ class Db extends Module
 			'read_all',
 			'select_all',
 			'count',
-		);
+		];
 	}
 
 	/**
@@ -112,7 +112,7 @@ class Db extends Module
 	function __call(string $name, array $arguments)
 	{
 		if (method_exists($this->db, $name)) {
-			return call_user_func_array(array($this->db, $name), $arguments);
+			return call_user_func_array([$this->db, $name], $arguments);
 		}
 		return null;
 	}
@@ -578,10 +578,10 @@ class Db extends Module
 	 */
 	public function delete(string $table, $where = [], array $options = []): bool
 	{
-		$options = array_merge(array(
+		$options = array_merge([
 			'confirm' => false,
 			'debug' => $this->options['debug'],
-		), $options);
+		], $options);
 
 		if (isset($this->deferedInserts[$table]))
 			$this->model->error('There are open bulk inserts on the table ' . $table . '; can\'t delete');
@@ -729,7 +729,7 @@ class Db extends Module
 			} else {
 				foreach ($join['fields'] as $nf => $f) {
 					if (!is_numeric($nf) and !is_array($f))
-						$f = array('field' => $nf, 'as' => $f);
+						$f = ['field' => $nf, 'as' => $f];
 
 					if (is_array($f) and isset($f['field'], $f['as']))
 						$join['fields'][$nf] = 'j' . $cj . '.' . $this->makeSafe($f['field']) . ' AS ' . $this->makeSafe($f['as']);
@@ -982,12 +982,12 @@ class Db extends Module
 		$auto_ml = ($multilang and array_key_exists($table, $multilang->tables)) ? true : false;
 		$lang = $multilang ? $multilang->lang : 'it';
 
-		$options = array(
+		$options = [
 			'multiple' => true,
 			'operator' => 'AND',
 			'distinct' => false,
 			'limit' => false,
-			'joins' => array(),
+			'joins' => [],
 			'order_by' => false,
 			'group_by' => false,
 			'auto_ml' => $auto_ml,
@@ -995,7 +995,7 @@ class Db extends Module
 			'field' => false,
 			'debug' => $this->options['debug'],
 			'return_query' => false,
-		);
+		];
 		$options = array_merge($options, $opt);
 
 		$this->trigger('count', [
@@ -1037,7 +1037,7 @@ class Db extends Module
 			$cj++;
 		}
 
-		$make_options = array('main_alias' => 't', 'joins' => $joins, 'auto_ml' => $options['auto_ml']);
+		$make_options = ['main_alias' => 't', 'joins' => $joins, 'auto_ml' => $options['auto_ml']];
 		$where_str = $this->makeSqlString($table, $where, ' ' . $options['operator'] . ' ', $make_options);
 
 		if (in_array($table, $this->options['autoHide']))
@@ -1327,11 +1327,11 @@ class Db extends Module
 			if (is_array($v))
 				return false;
 		}
-		if (!in_array($opt['operator'], array('AND', 'OR'))) return false;
+		if (!in_array($opt['operator'], ['AND', 'OR'])) return false;
 		if ($opt['order_by'] !== false) {
 			$ordinamento = str_word_count($opt['order_by'], 1, '0123456789_');
 			if (count($ordinamento) > 2) return false;
-			if (count($ordinamento) == 2 and !in_array(strtolower($ordinamento[1]), array('asc', 'desc'))) return false;
+			if (count($ordinamento) == 2 and !in_array(strtolower($ordinamento[1]), ['asc', 'desc'])) return false;
 		}
 
 		$multilang = $this->model->isLoaded('Multilang') ? $this->model->getModule('Multilang') : false;
@@ -1364,7 +1364,7 @@ class Db extends Module
 		else
 			$this->n_tables[$table . '-cache']++;
 
-		$results = array();
+		$results = [];
 		foreach ($this->cachedLists[$table] as $row) {
 			if (empty($where))
 				$verified = true;
@@ -1395,7 +1395,7 @@ class Db extends Module
 		if ($opt['multiple']) {
 			if ($opt['order_by']) {
 				$ordinamento = str_word_count($opt['order_by'], 1, '0123456789_');
-				if (count($ordinamento) == 1) $ordinamento = array($ordinamento[0], 'ASC');
+				if (count($ordinamento) == 1) $ordinamento = [$ordinamento[0], 'ASC'];
 				$ordinamento0 = $ordinamento[0];
 				$ordinamento1 = strtoupper($ordinamento[1]);
 
@@ -1456,7 +1456,7 @@ class Db extends Module
 		if (in_array($table, $this->options['listCache']) and isset($this->cachedLists[$table]))
 			unset($this->cachedLists[$table]);
 		if (isset($this->queryCache[$table]))
-			$this->queryCache[$table] = array();
+			$this->queryCache[$table] = [];
 
 		$this->trigger('changedTable', [
 			'table' => $table,
@@ -1504,7 +1504,7 @@ class Db extends Module
 		foreach ($options['joins'] as $join) {
 			if (!isset($join['full_fields'])) {
 				if (!is_array($join['fields']))
-					$join['fields'] = array($join['fields']);
+					$join['fields'] = [$join['fields']];
 				foreach ($join['fields'] as $nf => $f) {
 					if (is_array($f) and isset($f['as']))
 						$ff = $f['as'];
@@ -1758,7 +1758,7 @@ class Db extends Module
 			if (file_exists(__DIR__ . '/data/' . $this->unique_id . '/' . $table . '.php')) {
 				include(__DIR__ . '/data/' . $this->unique_id . '/' . $table . '.php');
 				if (!isset($foreign_keys))
-					$foreign_keys = array();
+					$foreign_keys = [];
 				$this->tables[$table] = new Table($table_columns, $foreign_keys);
 			} else {
 				$this->model->error('Can\'t find table model for "' . entities($table) . '" in cache.');
