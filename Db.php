@@ -11,26 +11,26 @@ class Db extends Module
 	/** @var \PDO */
 	protected $db;
 	/** @var array */
-	protected $tables = array();
+	protected $tables = [];
 
 	/** @var int */
 	public $n_query = 0;
 	/** @var int */
 	public $n_prepared = 0;
 	/** @var array */
-	public $n_tables = array();
+	public $n_tables = [];
 
 	/** @var int */
 	protected $c_transactions = 0;
 
 	/** @var array */
-	protected $querylimit_counter = array(
-		'query' => array(),
-		'table' => array()
-	);
+	protected $querylimit_counter = [
+		'query' => [],
+		'table' => []
+	];
 
 	/** @var array */
-	protected $options = array(
+	protected $options = [
 		'db' => 'primary',
 		'listCache' => [],
 		'autoHide' => [],
@@ -41,12 +41,15 @@ class Db extends Module
 		'use_buffered_query' => true,
 		'emulate_prepares' => false,
 		'local_infile' => true,
-	);
+	];
 
 	/** @var array */
-	protected $cachedLists = array();
+	protected $cachedLists = [];
 	/** @var array */
-	protected $queryCache = array();
+	protected $queryCache = [];
+
+	/** @var array */
+	protected $deferedInserts = [];
 
 	/**
 	 * @param array $options
@@ -87,7 +90,7 @@ class Db extends Module
 			$this->model->error('Error while connecting to database: ' . $e->getMessage());
 		}
 
-		$this->methods = array(
+		$this->methods = [
 			'query',
 			'insert',
 			'update',
@@ -98,7 +101,7 @@ class Db extends Module
 			'read_all',
 			'select_all',
 			'count',
-		);
+		];
 	}
 
 	/**
@@ -109,7 +112,7 @@ class Db extends Module
 	function __call(string $name, array $arguments)
 	{
 		if (method_exists($this->db, $name)) {
-			return call_user_func_array(array($this->db, $name), $arguments);
+			return call_user_func_array([$this->db, $name], $arguments);
 		}
 		return null;
 	}
@@ -252,15 +255,16 @@ class Db extends Module
 	 * @param string $table
 	 * @param array $data
 	 * @param array $options
-	 * @return int
+	 * @return int|null
 	 * @throws \Model\Core\Exception
 	 */
-	public function insert(string $table, array $data = [], array $options = []): int
+	public function insert(string $table, array $data = [], array $options = []): ?int
 	{
-		$options = array_merge(array(
+		$options = array_merge([
 			'replace' => false,
+			'defer' => null,
 			'debug' => $this->options['debug'],
-		), $options);
+		], $options);
 
 		$this->trigger('insert', [
 			'table' => $table,
@@ -279,8 +283,37 @@ class Db extends Module
 			}
 		}
 
+		if ($options['defer'] !== null) {
+			if ($data['multilang'])
+				$this->model->error('Cannot defer inserts with multilang fields');
+
+			if ($options['defer'] === true)
+				$options['defer'] = 0;
+			if (!is_numeric($options['defer']))
+				$this->model->error('Invalid defer value');
+			$options['defer'] = (int)$options['defer'];
+
+			if (!isset($this->deferedInserts[$table])) {
+				$this->deferedInserts[$table] = [
+					'options' => $options,
+					'rows' => [],
+				];
+			}
+
+			if ($this->deferedInserts[$table]['options'] !== $options)
+				$this->model->error('Cannot defer inserts with different options on the same table');
+
+			$this->deferedInserts[$table]['rows'][] = $data['data'];
+			if ($options['defer'] > 0 and count($this->deferedInserts[$table]['rows']) === $options['defer'])
+				$this->bulkInsert($table);
+
+			return null;
+		}
+
 		try {
-			$qry = $this->makeQueryForInsert($table, $data['data'], $options);
+			$qry = $this->makeQueryForInsert($table, [$data['data']], $options);
+			if (!$qry)
+				$this->model->error('Error while generating query for insert');
 
 			if ($options['debug'] and DEBUG_MODE)
 				echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
@@ -291,7 +324,9 @@ class Db extends Module
 				$multilangData[$multilangOptions['keyfield']] = $id;
 				$multilangData[$multilangOptions['lang']] = $lang;
 
-				$qry = $this->makeQueryForInsert($multilangTable, $multilangData, $options);
+				$qry = $this->makeQueryForInsert($multilangTable, [$multilangData], $options);
+				if (!$qry)
+					$this->model->error('Error while generating query for multilang insert');
 
 				if ($options['debug'] and DEBUG_MODE)
 					echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
@@ -308,7 +343,41 @@ class Db extends Module
 
 			return $id;
 		} catch (\Exception $e) {
-			$this->model->error('Error while inserting.', '<b>Error:</b> ' . getErr($e) . '<br /><b>Query:</b> ' . $qry);
+			$this->model->error('Error while inserting.', '<b>Error:</b> ' . getErr($e) . '<br /><b>Query:</b> ' . ($qry ?? 'Still undefined'));
+		}
+	}
+
+	/**
+	 * @param string $table
+	 */
+	public function bulkInsert(string $table)
+	{
+		if (!isset($this->deferedInserts[$table]))
+			return;
+
+		try {
+			$options = $this->deferedInserts[$table]['options'];
+
+			$qry = $this->makeQueryForInsert($table, $this->deferedInserts[$table]['rows'], $options);
+			if ($qry) {
+				$this->trigger('bulk-insert', [
+					'table' => $table,
+					'options' => $options,
+				]);
+
+				$this->query($qry, $table, 'INSERT', $options);
+
+				$this->changedTable($table);
+			} else {
+				$this->trigger('empty-bulk-insert', [
+					'table' => $table,
+					'options' => $options,
+				]);
+			}
+
+			unset($this->deferedInserts[$table]);
+		} catch (\Exception $e) {
+			$this->model->error('Error while bulk inserting.', '<b>Error:</b> ' . getErr($e), ['details' => '<b>Query:</b> ' . ($qry ?? 'Still undefined')]);
 		}
 	}
 
@@ -316,39 +385,60 @@ class Db extends Module
 	 * Builds a query for the insert method
 	 *
 	 * @param string $table
-	 * @param array $data
+	 * @param array $rows
 	 * @param array $options
-	 * @return string
+	 * @return string|null
 	 * @throws \Model\Core\Exception
 	 */
-	private function makeQueryForInsert(string $table, array $data, array $options): string
+	private function makeQueryForInsert(string $table, array $rows, array $options): ?string
 	{
 		$qry_init = $options['replace'] ? 'REPLACE' : 'INSERT';
 
-		if ($data === []) {
-			$tableModel = $this->getTable($table);
-			$arrIns = [];
-			foreach ($tableModel->columns as $k => $c) {
-				if ($c['null']) {
-					$arrIns[] = 'NULL';
-				} else {
-					if ($c['key'] == 'PRI')
-						$arrIns[] = 'NULL';
-					else
-						$arrIns[] = '\'\'';
-				}
-			}
-			$qry = $qry_init . ' INTO `' . $this->makeSafe($table) . '` VALUES(' . implode(',', $arrIns) . ')';
-		} else {
-			$keys = [];
-			$values = [];
-			foreach ($data as $k => $v) {
-				$keys[] = $this->elaborateField($table, $k);
-				if ($v === null) $values[] = 'NULL';
-				else $values[] = $this->elaborateValue($v);
-			}
+		$keys = [];
+		$keys_set = false;
+		$defaults = null;
+		$qry_rows = [];
 
-			$qry = $qry_init . ' INTO `' . $this->makeSafe($table) . '`(' . implode(',', $keys) . ') VALUES(' . implode(',', $values) . ')';
+		foreach ($rows as $data) {
+			if ($data === []) {
+				if ($defaults === null) {
+					$tableModel = $this->getTable($table);
+					foreach ($tableModel->columns as $k => $c) {
+						if ($c['null']) {
+							$defaults[] = 'NULL';
+						} else {
+							if ($c['key'] == 'PRI')
+								$defaults[] = 'NULL';
+							else
+								$defaults[] = '\'\'';
+						}
+					}
+				}
+				$qry_rows[] = '(' . implode(',', $defaults) . ')';
+			} else {
+				$values = [];
+				foreach ($data as $k => $v) {
+					if (!$keys_set)
+						$keys[] = $this->elaborateField($table, $k);
+
+					if ($v === null)
+						$values[] = 'NULL';
+					else
+						$values[] = $this->elaborateValue($v);
+				}
+				$keys_set = true;
+
+				$qry_rows[] = '(' . implode(',', $values) . ')';
+			}
+		}
+
+		$qry = null;
+		if (count($qry_rows) > 0) {
+			if ($keys_set) {
+				$qry = $qry_init . ' INTO `' . $this->makeSafe($table) . '`(' . implode(',', $keys) . ') VALUES' . implode(',', $qry_rows);
+			} else {
+				$qry = $qry_init . ' INTO `' . $this->makeSafe($table) . '` VALUES' . implode(',', $qry_rows);
+			}
 		}
 
 		return $qry;
@@ -372,6 +462,9 @@ class Db extends Module
 			'confirm' => false,
 			'debug' => $this->options['debug'],
 		], $options);
+
+		if (isset($this->deferedInserts[$table]))
+			$this->model->error('There are open bulk inserts on the table ' . $table . '; can\'t update');
 
 		$tableModel = $this->getTable($table);
 		if (!is_array($where) and is_numeric($where))
@@ -485,10 +578,13 @@ class Db extends Module
 	 */
 	public function delete(string $table, $where = [], array $options = []): bool
 	{
-		$options = array_merge(array(
+		$options = array_merge([
 			'confirm' => false,
 			'debug' => $this->options['debug'],
-		), $options);
+		], $options);
+
+		if (isset($this->deferedInserts[$table]))
+			$this->model->error('There are open bulk inserts on the table ' . $table . '; can\'t delete');
 
 		$tableModel = $this->getTable($table);
 		if (!is_array($where) and is_numeric($where))
@@ -555,6 +651,8 @@ class Db extends Module
 	{
 		if ($where === false or $where === null)
 			return false;
+		if (isset($this->deferedInserts[$table]))
+			$this->model->error('There are open bulk inserts on the table ' . $table . '; can\'t read');
 		if (!is_array($opt))
 			$opt = ['field' => $opt];
 
@@ -631,7 +729,7 @@ class Db extends Module
 			} else {
 				foreach ($join['fields'] as $nf => $f) {
 					if (!is_numeric($nf) and !is_array($f))
-						$f = array('field' => $nf, 'as' => $f);
+						$f = ['field' => $nf, 'as' => $f];
 
 					if (is_array($f) and isset($f['field'], $f['as']))
 						$join['fields'][$nf] = 'j' . $cj . '.' . $this->makeSafe($f['field']) . ' AS ' . $this->makeSafe($f['as']);
@@ -884,12 +982,12 @@ class Db extends Module
 		$auto_ml = ($multilang and array_key_exists($table, $multilang->tables)) ? true : false;
 		$lang = $multilang ? $multilang->lang : 'it';
 
-		$options = array(
+		$options = [
 			'multiple' => true,
 			'operator' => 'AND',
 			'distinct' => false,
 			'limit' => false,
-			'joins' => array(),
+			'joins' => [],
 			'order_by' => false,
 			'group_by' => false,
 			'auto_ml' => $auto_ml,
@@ -897,7 +995,7 @@ class Db extends Module
 			'field' => false,
 			'debug' => $this->options['debug'],
 			'return_query' => false,
-		);
+		];
 		$options = array_merge($options, $opt);
 
 		$this->trigger('count', [
@@ -939,7 +1037,7 @@ class Db extends Module
 			$cj++;
 		}
 
-		$make_options = array('main_alias' => 't', 'joins' => $joins, 'auto_ml' => $options['auto_ml']);
+		$make_options = ['main_alias' => 't', 'joins' => $joins, 'auto_ml' => $options['auto_ml']];
 		$where_str = $this->makeSqlString($table, $where, ' ' . $options['operator'] . ' ', $make_options);
 
 		if (in_array($table, $this->options['autoHide']))
@@ -1229,11 +1327,11 @@ class Db extends Module
 			if (is_array($v))
 				return false;
 		}
-		if (!in_array($opt['operator'], array('AND', 'OR'))) return false;
+		if (!in_array($opt['operator'], ['AND', 'OR'])) return false;
 		if ($opt['order_by'] !== false) {
 			$ordinamento = str_word_count($opt['order_by'], 1, '0123456789_');
 			if (count($ordinamento) > 2) return false;
-			if (count($ordinamento) == 2 and !in_array(strtolower($ordinamento[1]), array('asc', 'desc'))) return false;
+			if (count($ordinamento) == 2 and !in_array(strtolower($ordinamento[1]), ['asc', 'desc'])) return false;
 		}
 
 		$multilang = $this->model->isLoaded('Multilang') ? $this->model->getModule('Multilang') : false;
@@ -1266,7 +1364,7 @@ class Db extends Module
 		else
 			$this->n_tables[$table . '-cache']++;
 
-		$results = array();
+		$results = [];
 		foreach ($this->cachedLists[$table] as $row) {
 			if (empty($where))
 				$verified = true;
@@ -1297,7 +1395,7 @@ class Db extends Module
 		if ($opt['multiple']) {
 			if ($opt['order_by']) {
 				$ordinamento = str_word_count($opt['order_by'], 1, '0123456789_');
-				if (count($ordinamento) == 1) $ordinamento = array($ordinamento[0], 'ASC');
+				if (count($ordinamento) == 1) $ordinamento = [$ordinamento[0], 'ASC'];
 				$ordinamento0 = $ordinamento[0];
 				$ordinamento1 = strtoupper($ordinamento[1]);
 
@@ -1358,7 +1456,7 @@ class Db extends Module
 		if (in_array($table, $this->options['listCache']) and isset($this->cachedLists[$table]))
 			unset($this->cachedLists[$table]);
 		if (isset($this->queryCache[$table]))
-			$this->queryCache[$table] = array();
+			$this->queryCache[$table] = [];
 
 		$this->trigger('changedTable', [
 			'table' => $table,
@@ -1406,7 +1504,7 @@ class Db extends Module
 		foreach ($options['joins'] as $join) {
 			if (!isset($join['full_fields'])) {
 				if (!is_array($join['fields']))
-					$join['fields'] = array($join['fields']);
+					$join['fields'] = [$join['fields']];
 				foreach ($join['fields'] as $nf => $f) {
 					if (is_array($f) and isset($f['as']))
 						$ff = $f['as'];
@@ -1660,7 +1758,7 @@ class Db extends Module
 			if (file_exists(__DIR__ . '/data/' . $this->unique_id . '/' . $table . '.php')) {
 				include(__DIR__ . '/data/' . $this->unique_id . '/' . $table . '.php');
 				if (!isset($foreign_keys))
-					$foreign_keys = array();
+					$foreign_keys = [];
 				$this->tables[$table] = new Table($table_columns, $foreign_keys);
 			} else {
 				$this->model->error('Can\'t find table model for "' . entities($table) . '" in cache.');
