@@ -89,19 +89,6 @@ class Db extends Module
 		} catch (\Exception $e) {
 			$this->model->error('Error while connecting to database: ' . $e->getMessage());
 		}
-
-		$this->methods = [
-			'query',
-			'insert',
-			'update',
-			'updateOrInsert',
-			'delete',
-			'read',
-			'select',
-			'read_all',
-			'select_all',
-			'count',
-		];
 	}
 
 	/**
