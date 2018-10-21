@@ -1,6 +1,18 @@
 {
 	"name": "Db",
 	"description": "Abstraction layer for DB management (via PDO)",
-	"version": "1.4.6",
-	"dependencies": {}
+	"version": "1.5.0",
+	"dependencies": {},
+	"bind-methods": {
+		"query": "query",
+		"insert": "insert",
+		"update": "update",
+		"updateOrInsert": "updateOrInsert",
+		"delete": "delete",
+		"read": "read",
+		"select": "select",
+		"read_all": "read_all",
+		"select_all": "select_all",
+		"count": "count"
+	}
 }
