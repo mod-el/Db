@@ -150,7 +150,7 @@ $foreign_keys = ' . var_export($foreign_keys, true) . ';
 	 * @param array $request
 	 * @return string
 	 */
-	public function getTemplate(array $request)
+	public function getTemplate(array $request): ?string
 	{
 		return 'config';
 	}
