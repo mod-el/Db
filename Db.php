@@ -1539,6 +1539,18 @@ class Db extends Module
 			else
 				$this->model->error('Only DateTime objects can be passed as Db values.');
 		}
+		if (is_array($v)) {
+			reset($v);
+			if (count($v) === 1 and strtoupper(key($v)) === 'POINT') {
+				$v = reset($v);
+				if (count($v) !== 2 or !is_numeric($v[0]) or !is_numeric($v[1]))
+					$this->model->error('Wrong point format');
+
+				return 'POINT(' . $v[1] . ',' . $v[0] . ')';
+			} else {
+				$this->model->error('Unknown value type');
+			}
+		}
 
 		return $this->db->quote($v);
 	}
@@ -1556,7 +1568,7 @@ class Db extends Module
 		if (is_string($array))
 			return $array;
 		if (!is_array($array))
-			$this->model->error('Can\t elaborate where string.');
+			$this->model->error('Can\'t elaborate where string.');
 
 		$options = array_merge([
 			'for_where' => true,
@@ -1575,6 +1587,11 @@ class Db extends Module
 					$sub_str = $this->makeSqlString($table, $v, $k, $options);
 					if (!empty($sub_str))
 						$str[] = '(' . $sub_str . ')';
+					continue;
+				} elseif (!is_numeric($k) and strtoupper($k) === 'POINT') {
+					if (count($v) !== 2 or !is_numeric($v[0]) or !is_numeric($v[1]))
+						$this->model->error('Wrong point format');
+					$str[] = 'POINT(' . $v[1] . ',' . $v[0] . ')';
 					continue;
 				} elseif (isset($v['operator'], $v['sub'])) {
 					$sub_str = $this->makeSqlString($table, $v['sub'], $v['operator'], $options);
