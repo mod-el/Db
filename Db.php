@@ -1716,8 +1716,12 @@ class Db extends Module
 
 		$mainData = [];
 		foreach ($data as $k => $v) {
-			if (array_key_exists($k, $tableModel->columns))
+			if (array_key_exists($k, $tableModel->columns)) {
+				$c = $this->tables[$table]->columns[$k];
+				if (isset($c['extra']) and stripos($c['extra'], 'GENERATED') !== false)
+					continue;
 				$mainData[$k] = $v;
+			}
 		}
 
 		$multilangData = [];
