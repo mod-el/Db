@@ -787,6 +787,7 @@ class Db extends Module
 			}
 		}
 
+		$geometryColumns = [];
 		if (!$found) {
 			if ($options['field'] !== false) {
 				$singleField = true;
@@ -797,7 +798,20 @@ class Db extends Module
 					$fields[] = $this->elaborateField($table, $f, $make_options);
 				$qry .= implode(',', $fields);
 			} else {
-				$qry .= 't.*' . $sel_str;
+				$tempColumns = [];
+				foreach ($tableModel->columns as $k => $c) {
+					if ($c['type'] === 'point') {
+						$geometryColumns[] = $k;
+						$tempColumns[] = 'AsText(' . $this->elaborateField($table, $k, $make_options) . ') AS ' . $this->elaborateField($table, $k);
+					} else {
+						$tempColumns[] = $this->elaborateField($table, $k, $make_options);
+					}
+				}
+				if (count($geometryColumns) > 0)
+					$qry .= implode(',', $tempColumns);
+				else
+					$qry .= 't.*';
+				$qry .= $sel_str;
 			}
 		}
 
@@ -880,7 +894,7 @@ class Db extends Module
 	 * @param bool $isMultilang
 	 * @return \Generator
 	 */
-	private function streamResults(string $table, array $where = [], array $options = [], \PDOStatement $q, bool $isMultilang): \Generator
+	private function streamResults(string $table, array $where, array $options, \PDOStatement $q, bool $isMultilang): \Generator
 	{
 		foreach ($q as $r) {
 			if ($isMultilang)
@@ -1160,10 +1174,18 @@ class Db extends Module
 
 			if ($v !== null and $v !== false) {
 				if (array_key_exists($k, $this->tables[$table]->columns)) {
-					if (in_array($this->tables[$table]->columns[$k]['type'], ['double', 'float', 'decimal']))
+					$c = $this->tables[$table]->columns[$k];
+					if (in_array($c['type'], ['double', 'float', 'decimal']))
 						$v = (float)$v;
-					if (in_array($this->tables[$table]->columns[$k]['type'], ['tinyint', 'smallint', 'mediumint', 'int', 'bigint', 'year']))
+					if (in_array($c['type'], ['tinyint', 'smallint', 'mediumint', 'int', 'bigint', 'year']))
 						$v = (int)$v;
+					if ($c['type'] === 'point') {
+						$v = array_map(function ($v) {
+							return (float)$v;
+						}, explode(' ', substr($v, 6, -1)));
+						if (count($v) !== 2 or ($v[0] == 0 and $v[1] == 0))
+							$v = null;
+					}
 				}
 			}
 
