@@ -448,9 +448,10 @@ class Db extends Module
 			'version' => null,
 			'confirm' => false,
 			'debug' => $this->options['debug'],
+			'force' => false,
 		], $options);
 
-		if (isset($this->deferedInserts[$table]))
+		if (isset($this->deferedInserts[$table]) and !$options['force'])
 			$this->model->error('There are open bulk inserts on the table ' . $table . '; can\'t update');
 
 		$tableModel = $this->getTable($table);
@@ -568,9 +569,10 @@ class Db extends Module
 		$options = array_merge([
 			'confirm' => false,
 			'debug' => $this->options['debug'],
+			'force' => false,
 		], $options);
 
-		if (isset($this->deferedInserts[$table]))
+		if (isset($this->deferedInserts[$table]) and !$options['force'])
 			$this->model->error('There are open bulk inserts on the table ' . $table . '; can\'t delete');
 
 		$tableModel = $this->getTable($table);
