@@ -86,6 +86,11 @@ class Db extends Module
 				$this->name = $this->options['database'];
 				$this->unique_id = preg_replace('/[^A-Za-z0-9._-]/', '', $this->options['host'] . '-' . $this->options['database']);
 			}
+
+			if (!isset($this->options['user-filter']))
+				$this->options['user-filter'] = null;
+			if ($this->options['user-filter'] and (!is_array($this->options['user-filter']) or count($this->options['user-filter']) !== 2 or !isset($this->options['user-filter']['idx'], $this->options['user-filter']['column'])))
+				$this->options['user-filter'] = null;
 		} catch (\Exception $e) {
 			$this->model->error('Error while connecting to database: ' . $e->getMessage());
 		}
@@ -251,6 +256,7 @@ class Db extends Module
 			'replace' => false,
 			'defer' => null,
 			'debug' => $this->options['debug'],
+			'skip-user-filter' => false,
 		], $options);
 
 		$this->trigger('insert', [
@@ -259,7 +265,8 @@ class Db extends Module
 			'options' => $options,
 		]);
 
-		$this->getTable($table);
+		$tableModel = $this->getTable($table);
+		$this->addUserFilter($data, $tableModel, $options);
 		$data = $this->filterColumns($table, $data);
 		$this->checkDbData($table, $data['data'], $options);
 		if ($data['multilang']) {
@@ -449,6 +456,7 @@ class Db extends Module
 			'confirm' => false,
 			'debug' => $this->options['debug'],
 			'force' => false,
+			'skip-user-filter' => false,
 		], $options);
 
 		if (isset($this->deferedInserts[$table]) and !$options['force'])
@@ -457,6 +465,8 @@ class Db extends Module
 		$tableModel = $this->getTable($table);
 		if (!is_array($where) and is_numeric($where))
 			$where = [$tableModel->primary => $where];
+
+		$this->addUserFilter($where, $tableModel, $options);
 
 		$this->trigger('update', [
 			'table' => $table,
@@ -570,6 +580,7 @@ class Db extends Module
 			'confirm' => false,
 			'debug' => $this->options['debug'],
 			'force' => false,
+			'skip-user-filter' => false,
 		], $options);
 
 		if (isset($this->deferedInserts[$table]) and !$options['force'])
@@ -578,6 +589,8 @@ class Db extends Module
 		$tableModel = $this->getTable($table);
 		if (!is_array($where) and is_numeric($where))
 			$where = [$tableModel->primary => $where];
+
+		$this->addUserFilter($where, $tableModel, $options);
 
 		$this->trigger('delete', [
 			'table' => $table,
@@ -677,11 +690,12 @@ class Db extends Module
 			'return_query' => false,
 			'stream' => true,
 			'quick-cache' => true,
+			'skip-user-filter' => false,
 		], $opt);
 		if ($options['multiple'] === false and !$options['limit'])
 			$options['limit'] = 1;
 
-		$isMultilang = ($multilang and $options['auto_ml'] and array_key_exists($table, $multilang->tables));
+		$this->addUserFilter($where, $tableModel, $options);
 
 		$this->trigger('select', [
 			'table' => $table,
@@ -696,6 +710,8 @@ class Db extends Module
 				return $this->select_cache($table, $where, $options);
 			}
 		}
+
+		$isMultilang = ($multilang and $options['auto_ml'] and array_key_exists($table, $multilang->tables));
 
 		$sel_str = '';
 		$join_str = '';
@@ -998,8 +1014,11 @@ class Db extends Module
 			'field' => false,
 			'debug' => $this->options['debug'],
 			'return_query' => false,
+			'skip-user-filter' => false,
 		];
 		$options = array_merge($options, $opt);
+
+		$this->addUserFilter($where, $tableModel, $options);
 
 		$this->trigger('count', [
 			'table' => $table,
@@ -1195,6 +1214,17 @@ class Db extends Module
 		}
 
 		return $newRow;
+	}
+
+	/**
+	 * @param array $where
+	 * @param Table $tableModel
+	 * @param array $options
+	 */
+	private function addUserFilter(array &$where, Table $tableModel, array $options)
+	{
+		if ($this->options['user-filter'] and !$options['skip-user-filter'] and isset($tableModel->columns[$this->options['user-filter']['column']]))
+			$where[$this->options['user-filter']['column']] = $this->model->getModule('User', $this->options['user-filter']['idx'])->logged();
 	}
 
 	/**
