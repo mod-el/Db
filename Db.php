@@ -440,7 +440,7 @@ class Db extends Module
 
 	/**
 	 * @param string $table
-	 * @param array|int $where
+	 * @param mixed $where
 	 * @param array $data
 	 * @param array $options
 	 * @return bool
@@ -463,8 +463,9 @@ class Db extends Module
 			$this->model->error('There are open bulk inserts on the table ' . $table . '; can\'t update');
 
 		$tableModel = $this->getTable($table);
-		if (!is_array($where) and is_numeric($where))
-			$where = [$tableModel->primary => $where];
+		$where = $this->preliminaryWhereProcessing($tableModel, $where);
+		if ($where === null)
+			return false;
 
 		$this->addUserFilter($where, $tableModel, $options);
 
@@ -569,7 +570,7 @@ class Db extends Module
 
 	/**
 	 * @param string $table
-	 * @param array|int $where
+	 * @param mixed $where
 	 * @param array $options
 	 * @return bool
 	 * @throws \Model\Core\Exception
@@ -587,8 +588,9 @@ class Db extends Module
 			$this->model->error('There are open bulk inserts on the table ' . $table . '; can\'t delete');
 
 		$tableModel = $this->getTable($table);
-		if (!is_array($where) and is_numeric($where))
-			$where = [$tableModel->primary => $where];
+		$where = $this->preliminaryWhereProcessing($tableModel, $where);
+		if ($where === null)
+			return false;
 
 		$this->addUserFilter($where, $tableModel, $options);
 
@@ -631,12 +633,12 @@ class Db extends Module
 
 	/**
 	 * @param string $table
-	 * @param array $where
+	 * @param mixed $where
 	 * @param array $opt
 	 * @return mixed
 	 * @throws \Model\Core\Exception
 	 */
-	public function select_all(string $table, array $where = [], array $opt = [])
+	public function select_all(string $table, $where = [], array $opt = [])
 	{
 		$opt['multiple'] = true;
 		return $this->select($table, $where, $opt);
@@ -644,23 +646,22 @@ class Db extends Module
 
 	/**
 	 * @param string $table
-	 * @param array|int $where
+	 * @param mixed $where
 	 * @param array|string $opt
 	 * @return mixed
 	 * @throws \Model\Core\Exception
 	 */
 	public function select(string $table, $where = [], $opt = [])
 	{
-		if ($where === false or $where === null)
-			return false;
 		if (isset($this->deferedInserts[$table]))
 			$this->model->error('There are open bulk inserts on the table ' . $table . '; can\'t read');
 		if (!is_array($opt))
 			$opt = ['field' => $opt];
 
 		$tableModel = $this->getTable($table);
-		if (!is_array($where) and is_numeric($where))
-			$where = [$tableModel->primary => $where];
+		$where = $this->preliminaryWhereProcessing($tableModel, $where);
+		if ($where === null)
+			return false;
 
 		$multilang = $this->model->isLoaded('Multilang') ? $this->model->getModule('Multilang') : false;
 		$auto_ml = ($multilang and array_key_exists($table, $multilang->tables)) ? true : false;
@@ -983,19 +984,17 @@ class Db extends Module
 
 	/**
 	 * @param string $table
-	 * @param array|int $where
+	 * @param mixed $where
 	 * @param array $opt
 	 * @return int
 	 * @throws \Model\Core\Exception
 	 */
 	public function count(string $table, $where = [], array $opt = []): int
 	{
-		if ($where === false or $where === null)
-			return false;
-
 		$tableModel = $this->getTable($table);
-		if (!is_array($where) and is_numeric($where))
-			$where = [$tableModel->primary => $where];
+		$where = $this->preliminaryWhereProcessing($tableModel, $where);
+		if ($where === null)
+			return false;
 
 		$multilang = $this->model->isLoaded('Multilang') ? $this->model->getModule('Multilang') : false;
 		$auto_ml = ($multilang and array_key_exists($table, $multilang->tables)) ? true : false;
@@ -1610,20 +1609,36 @@ class Db extends Module
 	}
 
 	/**
+	 * @param Table $tableModel
+	 * @param $where
+	 * @return array|null
+	 */
+	private function preliminaryWhereProcessing(Table $tableModel, $where): ?array
+	{
+		if (is_array($where)) {
+			return $where;
+		} else {
+			if (is_numeric($where))
+				$where = [$tableModel->primary => $where];
+			elseif (is_string($where))
+				$where = [$where];
+			else
+				return null;
+
+			return $where;
+		}
+	}
+
+	/**
 	 * @param string $table
-	 * @param mixed $array
+	 * @param array $array
 	 * @param string $glue
 	 * @param array $options
 	 * @return string
 	 * @throws \Model\Core\Exception
 	 */
-	public function makeSqlString(string $table, $array, string $glue, array $options = []): string
+	public function makeSqlString(string $table, array $array, string $glue, array $options = []): string
 	{
-		if (is_string($array))
-			return $array;
-		if (!is_array($array))
-			$this->model->error('Can\'t elaborate where string.');
-
 		$options = array_merge([
 			'for_where' => true,
 			'auto_ml' => false,
