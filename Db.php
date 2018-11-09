@@ -1593,13 +1593,8 @@ class Db extends Module
 				$this->model->error('Only DateTime objects can be passed as Db values.');
 		}
 		if (is_array($v)) {
-			reset($v);
-			if (count($v) === 1 and strtoupper(key($v)) === 'POINT') {
-				$v = reset($v);
-				if (count($v) !== 2 or !is_numeric($v[0]) or !is_numeric($v[1]))
-					$this->model->error('Wrong point format');
-
-				return 'POINT(' . $v[1] . ',' . $v[0] . ')';
+			if (count($v) === 2 and is_numeric($v[0]) and is_numeric($v[1])) {
+				return 'POINT(' . $v[0] . ',' . $v[1] . ')';
 			} else {
 				$this->model->error('Unknown value type');
 			}
@@ -1647,6 +1642,8 @@ class Db extends Module
 			'prefix' => null,
 		], $options);
 
+		$tableModel = $this->getTable($table);
+
 		$str = [];
 		foreach ($array as $k => $v) {
 			$alreadyParsed = false;
@@ -1657,11 +1654,12 @@ class Db extends Module
 					if (!empty($sub_str))
 						$str[] = '(' . $sub_str . ')';
 					continue;
-				} elseif (!is_numeric($k) and strtoupper($k) === 'POINT') {
+				} elseif (!is_numeric($k) and isset($tableModel->columns[$k]) and strtoupper($tableModel->columns[$k]['type']) === 'POINT') {
 					if (count($v) !== 2 or !is_numeric($v[0]) or !is_numeric($v[1]))
 						$this->model->error('Wrong point format');
-					$str[] = 'POINT(' . $v[1] . ',' . $v[0] . ')';
-					continue;
+					$v1 = 'POINT(' . $v[0] . ',' . $v[1] . ')';
+					$operator = '=';
+					$alreadyParsed = true;
 				} elseif (isset($v['operator'], $v['sub'])) {
 					$sub_str = $this->makeSqlString($table, $v['sub'], $v['operator'], $options);
 					if (!empty($sub_str))
