@@ -26,7 +26,7 @@ class Db extends Module
 	/** @var array */
 	protected $querylimit_counter = [
 		'query' => [],
-		'table' => []
+		'table' => [],
 	];
 
 	/** @var array */
@@ -57,6 +57,9 @@ class Db extends Module
 	 */
 	public function init(array $options)
 	{
+		if ($this->module_id !== 0)
+			$this->options['db'] = $this->module_id;
+
 		$this->options = array_merge($this->options, $options);
 
 		try {
