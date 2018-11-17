@@ -1225,7 +1225,7 @@ class Db extends Module
 	 */
 	private function addUserFilter(array &$where, Table $tableModel, array $options)
 	{
-		if ($this->options['user-filter'] and !$options['skip-user-filter'] and isset($tableModel->columns[$this->options['user-filter']['column']]) and $this->model->isLoaded('User', $this->options['user-filter']['idx']))
+		if ($this->options['user-filter'] and !$options['skip-user-filter'] and isset($tableModel->columns[$this->options['user-filter']['column']]))
 			$where[$this->options['user-filter']['column']] = $this->model->getModule('User', $this->options['user-filter']['idx'])->logged();
 	}
 
