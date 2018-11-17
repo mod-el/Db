@@ -3,20 +3,25 @@
 class Table
 {
 	/** @var string */
+	public $name;
+	/** @var string */
 	public $primary;
 	/** @var array */
-	public $columns = array();
+	public $columns = [];
 	/** @var array */
-	public $foreign_keys = array();
+	public $foreign_keys = [];
 
 	/**
 	 * Table constructor.
 	 *
+	 * @param string $name
 	 * @param array $columns
 	 * @param array $foreign_keys
 	 */
-	function __construct(array $columns, array $foreign_keys = [])
+	function __construct(string $name, array $columns, array $foreign_keys = [])
 	{
+		$this->name = $name;
+
 		foreach ($columns as $k => $c) {
 			if ($c['key'] == 'PRI')
 				$this->primary = $k;

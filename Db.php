@@ -30,7 +30,7 @@ class Db extends Module
 	];
 
 	/** @var array */
-	protected $options = [
+	public $options = [
 		'db' => 'primary',
 		'listCache' => [],
 		'autoHide' => [],
@@ -92,7 +92,7 @@ class Db extends Module
 
 			if (!isset($this->options['user-filter']))
 				$this->options['user-filter'] = null;
-			if ($this->options['user-filter'] and (!is_array($this->options['user-filter']) or count($this->options['user-filter']) !== 2 or !isset($this->options['user-filter']['idx'], $this->options['user-filter']['column'])))
+			if ($this->options['user-filter'] and (!is_array($this->options['user-filter']) or count($this->options['user-filter']) < 2 or !isset($this->options['user-filter']['idx'], $this->options['user-filter']['column'])))
 				$this->options['user-filter'] = null;
 		} catch (\Exception $e) {
 			$this->model->error('Error while connecting to database: ' . $e->getMessage());
@@ -1225,8 +1225,14 @@ class Db extends Module
 	 */
 	private function addUserFilter(array &$where, Table $tableModel, array $options)
 	{
-		if ($this->options['user-filter'] and !$options['skip-user-filter'] and isset($tableModel->columns[$this->options['user-filter']['column']]) and !isset($where[$this->options['user-filter']['column']]))
+		if (
+			$this->options['user-filter']
+			and !$options['skip-user-filter']
+			and isset($tableModel->columns[$this->options['user-filter']['column']])
+			and (!isset($this->options['user-filter']['ignore']) or !in_array($tableModel->name, $this->options['user-filter']['ignore']))
+		) {
 			$where[$this->options['user-filter']['column']] = $this->model->getModule('User', $this->options['user-filter']['idx'])->logged();
+		}
 	}
 
 	/**
@@ -1837,7 +1843,7 @@ class Db extends Module
 				include(__DIR__ . '/data/' . $this->unique_id . '/' . $table . '.php');
 				if (!isset($foreign_keys))
 					$foreign_keys = [];
-				$this->tables[$table] = new Table($table_columns, $foreign_keys);
+				$this->tables[$table] = new Table($table, $table_columns, $foreign_keys);
 			} else {
 				$this->model->error('Can\'t find table model for "' . entities($table) . '" in cache.');
 			}
