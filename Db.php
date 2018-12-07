@@ -552,10 +552,10 @@ class Db extends Module
 	 * @param array|int $where
 	 * @param array $data
 	 * @param array $options
-	 * @return bool|int
+	 * @return null|int
 	 * @throws \Model\Core\Exception
 	 */
-	public function updateOrInsert(string $table, $where, array $data = null, array $options = [])
+	public function updateOrInsert(string $table, $where, array $data = null, array $options = []): ?int
 	{
 		if (!is_array($data))
 			$this->model->error('Error while updating.', '<b>Error:</b> No data array was given!');
@@ -564,8 +564,10 @@ class Db extends Module
 		if (!is_array($where) and is_numeric($where))
 			$where = [$tableModel->primary => $where];
 
-		if ($this->count($table, $where) > 0) {
-			return $this->update($table, $where, $data, $options);
+		$check = $this->select($table, $where);
+		if ($check) {
+			$this->update($table, $where, $data, $options);
+			return $check[$tableModel->primary];
 		} else {
 			return $this->insert($table, array_merge($where, $data), $options);
 		}
