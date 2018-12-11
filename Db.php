@@ -1189,7 +1189,7 @@ class Db extends Module
 	 */
 	private function normalizeTypesInSelect(string $table, array $row): array
 	{
-		if (!isset($this->tables[$table]) or !$this->tables[$table])
+		if (!$this->getTable($table, false))
 			return $row;
 
 		$newRow = [];
@@ -1198,8 +1198,8 @@ class Db extends Module
 				$k = substr($k, 7);
 
 			if ($v !== null and $v !== false) {
-				if (array_key_exists($k, $this->tables[$table]->columns)) {
-					$c = $this->tables[$table]->columns[$k];
+				if (array_key_exists($k, $this->getTable($table)->columns)) {
+					$c = $this->getTable($table)->columns[$k];
 					if (in_array($c['type'], ['double', 'float', 'decimal']))
 						$v = (float)$v;
 					if (in_array($c['type'], ['tinyint', 'smallint', 'mediumint', 'int', 'bigint', 'year']))
@@ -1344,15 +1344,15 @@ class Db extends Module
 			'checkTypes' => true,
 			'checkLengths' => false,
 		], $options);
-		if ($options['check'] === false or $this->tables[$table] === false) // Se è stata disabilitata la verifica dalle opzioni, oppure non esiste file di configurazione per questa tabella, salto la verifica
+		if ($options['check'] === false or !$this->getTable($table, false)) // Se è stata disabilitata la verifica dalle opzioni, oppure non esiste file di configurazione per questa tabella, salto la verifica
 			return true;
 
 		foreach ($data as $k => $v) {
-			if (!array_key_exists($k, $this->tables[$table]->columns)) {
+			if (!array_key_exists($k, $this->getTable($table)->columns)) {
 				$this->model->error('Error while writing data.', 'Database column "' . $table . '.' . $k . '" does not exist! (either that or cache needs to be generated)');
 			}
 			if ($options['checkTypes']) {
-				if (!$this->tables[$table]->checkType($k, $v, $options)) {
+				if (!$this->getTable($table)->checkType($k, $v, $options)) {
 					$this->model->error('Error while writing data.', 'Data type for column "' . $table . '.' . $k . '" does not match!<br />' . zkdump($v, true, true));
 				}
 			}
@@ -1795,7 +1795,7 @@ class Db extends Module
 		$mainData = [];
 		foreach ($data as $k => $v) {
 			if (array_key_exists($k, $tableModel->columns)) {
-				$c = $this->tables[$table]->columns[$k];
+				$c = $tableModel->columns[$k];
 				if (isset($c['extra']) and stripos($c['extra'], 'GENERATED') !== false)
 					continue;
 				$mainData[$k] = $v;
@@ -1835,10 +1835,11 @@ class Db extends Module
 
 	/**
 	 * @param string $table
-	 * @return Table|bool
+	 * @param bool $throw
+	 * @return Table|null
 	 * @throws \Model\Core\Exception
 	 */
-	public function getTable(string $table)
+	public function getTable(string $table, bool $throw = true): ?Table
 	{
 		if (!isset($this->tables[$table])) {
 			if (file_exists(__DIR__ . '/data/' . $this->unique_id . '/' . $table . '.php')) {
@@ -1847,7 +1848,10 @@ class Db extends Module
 					$foreign_keys = [];
 				$this->tables[$table] = new Table($table, $table_columns, $foreign_keys);
 			} else {
-				$this->model->error('Can\'t find table model for "' . entities($table) . '" in cache.');
+				if ($throw)
+					$this->model->error('Can\'t find table model for "' . entities($table) . '" in cache.');
+				else
+					return null;
 			}
 		}
 		return $this->tables[$table];
