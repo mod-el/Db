@@ -190,7 +190,7 @@ class Db extends Module
 	/**
 	 * @return bool
 	 */
-	public function beginTransaction()
+	public function beginTransaction(): bool
 	{
 		$res = $this->c_transactions == 0 ? $this->db->beginTransaction() : true;
 		if ($res)
@@ -201,7 +201,7 @@ class Db extends Module
 	/**
 	 * @return bool
 	 */
-	public function commit()
+	public function commit(): bool
 	{
 		if ($this->c_transactions <= 0)
 			return false;
@@ -216,7 +216,7 @@ class Db extends Module
 	/**
 	 * @return bool
 	 */
-	public function rollBack()
+	public function rollBack(): bool
 	{
 		if ($this->c_transactions > 0) {
 			$this->c_transactions = 0;
