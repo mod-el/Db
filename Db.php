@@ -1712,7 +1712,8 @@ class Db extends Module
 							}
 							break;
 						case 4:
-							if ($v[1] != 'BETWEEN') continue;
+							if ($v[1] != 'BETWEEN')
+								continue 2;
 							$k = $v[0];
 							$operator = $v[1];
 							$v1 = $v[2];
