@@ -8,7 +8,7 @@ class Config extends Module_Config
 	public $hasCleanUp = true;
 
 	/**
-	 * @throws \Model\Core\Exception
+	 *
 	 */
 	protected function assetsList()
 	{
@@ -19,7 +19,6 @@ class Config extends Module_Config
 	 * Caches all the tables structure
 	 *
 	 * @return bool
-	 * @throws \Exception
 	 */
 	public function makeCache(): bool
 	{
@@ -147,10 +146,10 @@ $foreign_keys = ' . var_export($foreign_keys, true) . ';
 	/**
 	 * Returns the config template
 	 *
-	 * @param array $request
+	 * @param string $type
 	 * @return string
 	 */
-	public function getTemplate(array $request): ?string
+	public function getTemplate(string $type): ?string
 	{
 		return 'config';
 	}
@@ -161,7 +160,6 @@ $foreign_keys = ' . var_export($foreign_keys, true) . ';
 	 * @param string $type
 	 * @param array $data
 	 * @return bool
-	 * @throws \Exception
 	 */
 	public function saveConfig(string $type, array $data): bool
 	{
@@ -214,11 +212,10 @@ $config = ' . var_export($config, true) . ';
 	 *
 	 * @param array $data
 	 * @return bool
-	 * @throws \Exception
 	 */
-	public function install(array $data = []): bool
+	public function init(?array $data = null): bool
 	{
-		if (!$this->saveConfig('install', $data))
+		if ($data===null or !$this->saveConfig('install', $data))
 			return false;
 
 		$this->model->_Db->query('CREATE TABLE IF NOT EXISTS `main_settings` (
@@ -246,9 +243,8 @@ $config = ' . var_export($config, true) . ';
 	 * Gets the data for CLI configuration
 	 *
 	 * @return array
-	 * @throws \Exception
 	 */
-	public function getConfigData(): array
+	public function getConfigData(): ?array
 	{
 		$keys = [];
 

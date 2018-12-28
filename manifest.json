@@ -3,7 +3,7 @@
 	"description": "Abstraction layer for DB management (via PDO)",
 	"version": "1.5.1",
 	"dependencies": {
-		"Core": ">=2.7.1"
+		"Core": ">=2.8.1"
 	},
 	"bind-methods": {
 		"query": "query",
