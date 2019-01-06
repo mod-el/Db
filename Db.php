@@ -735,6 +735,14 @@ class Db extends Module
 
 		$cj = 0;
 		foreach ($joins as $join) {
+			if (!isset($join['type']))
+				$join['type'] = 'INNER';
+
+			if (isset($join['alias']))
+				$joinAlias = $join['alias'];
+			else
+				$joinAlias = 'j' . $cj;
+
 			if (isset($join['full_fields'])) {
 				$sel_str .= ',' . $join['full_fields'];
 			} else {
@@ -743,25 +751,22 @@ class Db extends Module
 						$f = ['field' => $nf, 'as' => $f];
 
 					if (is_array($f) and isset($f['field'], $f['as']))
-						$join['fields'][$nf] = 'j' . $cj . '.' . $this->makeSafe($f['field']) . ' AS ' . $this->makeSafe($f['as']);
+						$join['fields'][$nf] = $joinAlias . '.' . $this->makeSafe($f['field']) . ' AS ' . $this->makeSafe($f['as']);
 					else
-						$join['fields'][$nf] = 'j' . $cj . '.' . $this->makeSafe($f);
+						$join['fields'][$nf] = $joinAlias . '.' . $this->makeSafe($f);
 				}
 				if ($join['fields'])
 					$sel_str .= ',' . implode(',', $join['fields']);
 			}
 
-			if (!isset($join['type']))
-				$join['type'] = 'INNER';
-
 			if (isset($join['full_on'])) {
-				$join_str .= ' ' . $join['type'] . ' JOIN `' . $this->makeSafe($join['table']) . '` j' . $cj . ' ON (' . $join['full_on'] . ')';
+				$join_str .= ' ' . $join['type'] . ' JOIN `' . $this->makeSafe($join['table']) . '` ' . $joinAlias . ' ON (' . $join['full_on'] . ')';
 			} else {
 				$join_where = array_merge([
-					'j' . $cj . '.`' . $this->makeSafe($join['join_field']) . '` = t.`' . $this->makeSafe($join['on']) . '`',
+					$joinAlias . '.`' . $this->makeSafe($join['join_field']) . '` = t.`' . $this->makeSafe($join['on']) . '`',
 				], $join['where']);
 
-				$join_str .= ' ' . $join['type'] . ' JOIN `' . $this->makeSafe($join['table']) . '` j' . $cj . ' ON (' . $this->makeSqlString($table, $join_where, 'AND', ['joins' => $joins]) . ')';
+				$join_str .= ' ' . $join['type'] . ' JOIN `' . $this->makeSafe($join['table']) . '` ' . $joinAlias . ' ON (' . $this->makeSqlString($table, $join_where, 'AND', ['joins' => $joins]) . ')';
 			}
 
 			$cj++;
@@ -1054,16 +1059,22 @@ class Db extends Module
 
 		$cj = 0;
 		foreach ($joins as $join) {
-			if (!isset($join['type'])) $join['type'] = 'INNER';
+			if (!isset($join['type']))
+				$join['type'] = 'INNER';
+
+			if (isset($join['alias']))
+				$joinAlias = $join['alias'];
+			else
+				$joinAlias = 'j' . $cj;
 
 			if (isset($join['full_on'])) {
-				$join_str .= ' ' . $join['type'] . ' JOIN `' . $this->makeSafe($join['table']) . '` j' . $cj . ' ON (' . $join['full_on'] . ')';
+				$join_str .= ' ' . $join['type'] . ' JOIN `' . $this->makeSafe($join['table']) . '` ' . $joinAlias . ' ON (' . $join['full_on'] . ')';
 			} else {
 				$join_where = array_merge([
-					'j' . $cj . '.`' . $this->makeSafe($join['join_field']) . '` = t.`' . $this->makeSafe($join['on']) . '`',
+					$joinAlias . '.`' . $this->makeSafe($join['join_field']) . '` = t.`' . $this->makeSafe($join['on']) . '`',
 				], $join['where']);
 
-				$join_str .= ' ' . $join['type'] . ' JOIN `' . $this->makeSafe($join['table']) . '` j' . $cj . ' ON (' . $this->makeSqlString($table, $join_where, 'AND', ['joins' => $joins]) . ')';
+				$join_str .= ' ' . $join['type'] . ' JOIN `' . $this->makeSafe($join['table']) . '` ' . $joinAlias . ' ON (' . $this->makeSqlString($table, $join_where, 'AND', ['joins' => $joins]) . ')';
 			}
 			$cj++;
 		}
@@ -1559,8 +1570,14 @@ class Db extends Module
 		$cj = 0;
 		foreach ($options['joins'] as $join) {
 			if (!isset($join['full_fields'])) {
+				if (isset($join['alias']))
+					$joinAlias = $join['alias'];
+				else
+					$joinAlias = 'j' . $cj;
+
 				if (!is_array($join['fields']))
 					$join['fields'] = [$join['fields']];
+
 				foreach ($join['fields'] as $nf => $f) {
 					if (is_array($f) and isset($f['as']))
 						$ff = $f['as'];
@@ -1569,10 +1586,10 @@ class Db extends Module
 
 					if ($ff == $k) {
 						if (!is_array($f) and is_numeric($nf)) {
-							$kr = 'j' . $cj . '.' . $kr;
+							$kr = $joinAlias . '.' . $kr;
 						} else {
 							if (is_array($f)) $kr = 'j' . $cj . '.' . $f['field'];
-							else $kr = 'j' . $cj . '.' . $nf;
+							else $kr = $joinAlias . '.' . $nf;
 						}
 						$changed = true;
 					}
