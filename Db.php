@@ -755,7 +755,7 @@ class Db extends Module
 				$join['type'] = 'INNER';
 
 			if (isset($join['full_on'])) {
-				$join_str .= ' ' . $join['type'] . ' JOIN `' . $this->makeSafe($join['table']) . '` j' . $cj . ' ON ' . $join['full_on'];
+				$join_str .= ' ' . $join['type'] . ' JOIN `' . $this->makeSafe($join['table']) . '` j' . $cj . ' ON (' . $join['full_on'] . ')';
 			} else {
 				$join_where = array_merge([
 					'j' . $cj . '.`' . $this->makeSafe($join['join_field']) . '` = t.`' . $this->makeSafe($join['on']) . '`',
@@ -1057,7 +1057,7 @@ class Db extends Module
 			if (!isset($join['type'])) $join['type'] = 'INNER';
 
 			if (isset($join['full_on'])) {
-				$join_str .= ' ' . $join['type'] . ' JOIN `' . $this->makeSafe($join['table']) . '` j' . $cj . ' ON ' . $join['full_on'];
+				$join_str .= ' ' . $join['type'] . ' JOIN `' . $this->makeSafe($join['table']) . '` j' . $cj . ' ON (' . $join['full_on'] . ')';
 			} else {
 				$join_where = array_merge([
 					'j' . $cj . '.`' . $this->makeSafe($join['join_field']) . '` = t.`' . $this->makeSafe($join['on']) . '`',
