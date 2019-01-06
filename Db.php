@@ -795,10 +795,15 @@ class Db extends Module
 					if (!$found and !$options['only-aggregates'])
 						$qry .= 't.*' . $sel_str;
 
-					foreach ($options[$f] as $field) {
+					foreach ($options[$f] as $field => $alias) {
 						if ($found or !$options['only-aggregates'])
 							$qry .= ',';
-						$qry .= strtoupper($f) . '(' . $this->elaborateField($table, $field, $make_options) . ') AS ' . $this->elaborateField($table, 'zkaggr_' . $field, array_merge($make_options, ['add-alias' => false]));
+
+						if (is_numeric($field) and is_string($alias)) {
+							$field = $alias;
+							$alias = $this->elaborateField($table, 'zkaggr_' . $field, array_merge($make_options, ['add-alias' => false]));
+						}
+						$qry .= strtoupper($f) . '(' . $this->elaborateField($table, $field, $make_options) . ') AS ' . $alias;
 					}
 
 					$found = true;
