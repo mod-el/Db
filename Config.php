@@ -169,7 +169,7 @@ $foreign_keys = ' . var_export($foreign_keys, true) . ';
 			foreach ($config['databases'] as $idx => $db) {
 				if (isset($data['delete-' . $idx]) and $data['delete-' . $idx] == 'yes') { // Config row for this database was deleted
 					unset($config['databases'][$idx]);
-				} else {
+				} elseif (isset($data[$idx . '-host'])) {
 					$config['databases'][$idx]['host'] = $data[$idx . '-host'];
 					$config['databases'][$idx]['username'] = $data[$idx . '-username'];
 					$config['databases'][$idx]['database'] = $data[$idx . '-database'];
@@ -185,7 +185,7 @@ $foreign_keys = ' . var_export($foreign_keys, true) . ';
 			}
 		}
 
-		if ($data['new-idx'] and !isset($config['databases'][$data['new-idx']])) {
+		if ($data['new-idx'] ?? null) {
 			if (!$data['new-host'] or !$data['new-username'] or !$data['new-database'])
 				return false;
 
@@ -215,8 +215,10 @@ $config = ' . var_export($config, true) . ';
 	 */
 	public function init(?array $data = null): bool
 	{
-		if ($data===null or !$this->saveConfig('install', $data))
+		if ($data === null or !$this->saveConfig('init', $data))
 			return false;
+
+		$this->model->markModuleAsInitialized('Db');
 
 		$this->model->_Db->query('CREATE TABLE IF NOT EXISTS `main_settings` (
 		  `id` int(11) NOT NULL AUTO_INCREMENT,
