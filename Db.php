@@ -240,6 +240,10 @@ class Db extends Module
 	 */
 	public function terminate()
 	{
+		foreach ($this->deferedInserts as $table => $options) {
+			if (count($options['rows']) > 0)
+				$this->bulkInsert($table);
+		}
 		if ($this->c_transactions > 0)
 			$this->rollBack();
 	}
