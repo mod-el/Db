@@ -892,7 +892,7 @@ class Db extends Module
 			$return = $this->normalizeTypesInSelect($table, $return);
 			$return = $return[$options['field']];
 		} elseif ($options['multiple']) {
-			$results = $this->streamResults($table, $where, $options, $q, $isMultilang);
+			$results = $this->streamResults($table, $options, $q, $isMultilang);
 			if ($options['stream'])
 				return $results;
 
@@ -903,7 +903,7 @@ class Db extends Module
 			$return = $q->fetch();
 			if ($return !== false) {
 				if ($isMultilang and $options['fallback'])
-					$return = $this->multilangFallback($table, $options, $return);
+					$return = $this->multilangFallback($table, $return, $options);
 				$return = $this->normalizeTypesInSelect($table, $return);
 			}
 		}
@@ -922,17 +922,16 @@ class Db extends Module
 	 * Streams the results via generator, applying necessary modifiers (multilang fallback and fields normalization)
 	 *
 	 * @param string $table
-	 * @param array $where
 	 * @param array $options
 	 * @param \PDOStatement $q
 	 * @param bool $isMultilang
 	 * @return \Generator
 	 */
-	private function streamResults(string $table, array $where, array $options, \PDOStatement $q, bool $isMultilang): \Generator
+	private function streamResults(string $table, array $options, \PDOStatement $q, bool $isMultilang): \Generator
 	{
 		foreach ($q as $r) {
 			if ($isMultilang)
-				$r = $this->multilangFallback($table, $options, $r);
+				$r = $this->multilangFallback($table, $r, $options);
 			$data = $this->normalizeTypesInSelect($table, $r);
 			yield $data;
 		}
@@ -940,11 +939,11 @@ class Db extends Module
 
 	/**
 	 * @param string $table
-	 * @param array $options
 	 * @param array $data
+	 * @param array $options
 	 * @return array
 	 */
-	private function multilangFallback(string $table, array $options = [], array $data): array
+	private function multilangFallback(string $table, array $data, array $options = []): array
 	{
 		if (!$this->model->_Multilang->options['fallback'] or !isset($this->model->_Multilang->tables[$table]))
 			return $data;
