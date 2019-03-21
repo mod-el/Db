@@ -44,7 +44,9 @@ class Db extends Module
 	];
 
 	/** @var array */
-	protected $cachedLists = [];
+	protected $tablesToCache = [];
+	/** @var array */
+	protected $cachedTables = [];
 	/** @var array */
 	protected $queryCache = [];
 
@@ -53,7 +55,6 @@ class Db extends Module
 
 	/**
 	 * @param array $options
-	 * @throws \Model\Core\Exception
 	 */
 	public function init(array $options)
 	{
@@ -90,6 +91,8 @@ class Db extends Module
 				$this->unique_id = preg_replace('/[^A-Za-z0-9._-]/', '', $this->options['host'] . '-' . $this->options['database']);
 			}
 
+			$this->tablesToCache = $this->options['listCache'];
+
 			if (!isset($this->options['user-filter']))
 				$this->options['user-filter'] = null;
 			if ($this->options['user-filter'] and (!is_array($this->options['user-filter']) or count($this->options['user-filter']) < 2 or !isset($this->options['user-filter']['idx'], $this->options['user-filter']['column'])))
@@ -118,7 +121,6 @@ class Db extends Module
 	 * @param string $type
 	 * @param array $options
 	 * @return \PDOStatement|int
-	 * @throws \Model\Core\Exception
 	 */
 	public function query(string $qry, string $table = null, string $type = null, array $options = [])
 	{
@@ -255,7 +257,6 @@ class Db extends Module
 	 * @param array $data
 	 * @param array $options
 	 * @return int|null
-	 * @throws \Model\Core\Exception
 	 */
 	public function insert(string $table, array $data = [], array $options = []): ?int
 	{
@@ -340,6 +341,12 @@ class Db extends Module
 				'id' => $id,
 			]);
 
+			if (isset($this->cachedTables[$table])) {
+				$dataForCache = array_merge($data['data'], count($data['multilang']) > 0 ? reset($data['multilang']) : []);
+				$dataForCache[$tableModel->primary] = $id;
+				$this->insert_cache($table, $dataForCache);
+			}
+
 			$this->changedTable($table);
 
 			return $id;
@@ -368,6 +375,7 @@ class Db extends Module
 
 				$this->query($qry, $table, 'INSERT', $options);
 
+				$this->flushTableCache($table);
 				$this->changedTable($table);
 			} else {
 				$this->trigger('empty-bulk-insert', [
@@ -389,7 +397,6 @@ class Db extends Module
 	 * @param array $rows
 	 * @param array $options
 	 * @return string|null
-	 * @throws \Model\Core\Exception
 	 */
 	private function makeQueryForInsert(string $table, array $rows, array $options): ?string
 	{
@@ -451,7 +458,6 @@ class Db extends Module
 	 * @param array $data
 	 * @param array $options
 	 * @return bool
-	 * @throws \Model\Core\Exception
 	 */
 	public function update(string $table, $where, array $data = null, array $options = []): bool
 	{
@@ -544,6 +550,13 @@ class Db extends Module
 				}
 			}
 
+			if (isset($this->cachedTables[$table])) {
+				if ($this->canUseCache($table, $where, $options))
+					$this->update_cache($table, $where, array_merge($data['data'], count($data['multilang']) > 0 ? reset($data['multilang']) : []), $options);
+				else
+					$this->flushTableCache($table);
+			}
+
 			$this->changedTable($table);
 		} catch (\Exception $e) {
 			$this->model->error('Error while updating.', '<b>Error:</b> ' . getErr($e) . '<br /><b>Query:</b> ' . $qry);
@@ -557,7 +570,6 @@ class Db extends Module
 	 * @param array $data
 	 * @param array $options
 	 * @return null|int
-	 * @throws \Model\Core\Exception
 	 */
 	public function updateOrInsert(string $table, $where, array $data = null, array $options = []): ?int
 	{
@@ -582,7 +594,6 @@ class Db extends Module
 	 * @param mixed $where
 	 * @param array $options
 	 * @return bool
-	 * @throws \Model\Core\Exception
 	 */
 	public function delete(string $table, $where = [], array $options = []): bool
 	{
@@ -623,6 +634,13 @@ class Db extends Module
 		try {
 			$this->query($qry, $table, 'DELETE', $options);
 
+			if ($this->canUseCache($table, $where, $options)) {
+				if ($this->canUseCache($table, $where, $options))
+					$this->delete_cache($table, $where, $options);
+				else
+					$this->flushTableCache($table);
+			}
+
 			$this->changedTable($table);
 		} catch (\Exception $e) {
 			$messaggio = 'Error while deleting';
@@ -645,7 +663,6 @@ class Db extends Module
 	 * @param mixed $where
 	 * @param array $opt
 	 * @return mixed
-	 * @throws \Model\Core\Exception
 	 */
 	public function select_all(string $table, $where = [], array $opt = [])
 	{
@@ -658,7 +675,6 @@ class Db extends Module
 	 * @param mixed $where
 	 * @param array|string $opt
 	 * @return mixed
-	 * @throws \Model\Core\Exception
 	 */
 	public function select(string $table, $where = [], $opt = [])
 	{
@@ -713,13 +729,8 @@ class Db extends Module
 			'options' => $options,
 		]);
 
-		if (in_array($table, $this->options['listCache']) and !isset($opt['ignoreCache'])) {
-			if ($this->canUseCache($table, $where, $options)) {
-				if (!isset($this->cachedLists[$table]))
-					$this->cachedLists[$table] = $this->select_all($table, [], ['stream' => false, 'ignoreCache' => true]);
-				return $this->select_cache($table, $where, $options);
-			}
-		}
+		if (!isset($opt['ignoreCache']) and $this->canUseCache($table, $where, $options))
+			return $this->select_cache($table, $where, $options);
 
 		$isMultilang = ($multilang and $options['auto_ml'] and array_key_exists($table, $multilang->tables));
 
@@ -1005,7 +1016,6 @@ class Db extends Module
 	 * @param mixed $where
 	 * @param array $opt
 	 * @return int
-	 * @throws \Model\Core\Exception
 	 */
 	public function count(string $table, $where = [], array $opt = []): int
 	{
@@ -1043,13 +1053,8 @@ class Db extends Module
 			'options' => $options,
 		]);
 
-		if (in_array($table, $this->options['listCache']) and !isset($opt['ignoreCache'])) {
-			if ($this->canUseCache($table, $where, $options)) {
-				if (!isset($this->cachedLists[$table]))
-					$this->cachedLists[$table] = $this->select_all($table, [], ['stream' => false, 'ignoreCache' => true]);
-				return count($this->select_cache($table, $where, $options));
-			}
-		}
+		if (!isset($opt['ignoreCache']) and $this->canUseCache($table, $where, $options))
+			return count($this->select_cache($table, $where, $options));
 
 		$join_str = '';
 
@@ -1260,7 +1265,6 @@ class Db extends Module
 	 * @param string $table
 	 * @param array $joins
 	 * @return array
-	 * @throws \Model\Core\Exception
 	 */
 	private function elaborateJoins(string $table, array $joins): array
 	{
@@ -1354,7 +1358,6 @@ class Db extends Module
 	 * @param array $data
 	 * @param array $options
 	 * @return bool
-	 * @throws \Model\Core\Exception
 	 */
 	private function checkDbData(string $table, array $data, array $options = []): bool
 	{
@@ -1382,37 +1385,65 @@ class Db extends Module
 
 	/**
 	 * @param string $table
-	 * @param array $where
-	 * @param array $opt
-	 * @return bool
-	 * @throws \Model\Core\Exception
 	 */
-	private function canUseCache(string $table, array $where = [], array $opt = []): bool
+	public function cacheTable(string $table)
 	{
-		if (!in_array($table, $this->options['listCache']))
+		if (!in_array($table, $this->tablesToCache))
+			$this->tablesToCache[] = $table;
+	}
+
+	/**
+	 * @param string $table
+	 */
+	public function uncacheTable(string $table)
+	{
+		$this->flushTableCache($table);
+
+		$idx = array_search($table, $this->tablesToCache);
+		if ($idx !== false)
+			unset($this->tablesToCache[$idx]);
+	}
+
+	/**
+	 * @param string $table
+	 * @param array $where
+	 * @param array $options
+	 * @return bool
+	 */
+	private function canUseCache(string $table, array $where = [], array $options = []): bool
+	{
+		if (!in_array($table, $this->tablesToCache))
 			return false;
+
 		foreach ($where as $k => $v) {
 			if (is_numeric($k) and is_string($v))
 				return false;
 			if (is_array($v))
 				return false;
 		}
-		if (!in_array($opt['operator'], ['AND', 'OR'])) return false;
-		if ($opt['order_by'] !== false) {
-			$ordinamento = str_word_count($opt['order_by'], 1, '0123456789_');
-			if (count($ordinamento) > 2) return false;
-			if (count($ordinamento) == 2 and !in_array(strtolower($ordinamento[1]), ['asc', 'desc'])) return false;
+
+		if (!in_array($options['operator'] ?? 'AND', ['AND', 'OR']))
+			return false;
+
+		if (($options['order_by'] ?? false) !== false) {
+			$orderBy = str_word_count($options['order_by'], 1, '0123456789_');
+			if (count($orderBy) > 2)
+				return false;
+			if (count($orderBy) == 2 and !in_array(strtolower($orderBy[1]), ['asc', 'desc']))
+				return false;
 		}
 
-		$multilang = $this->model->isLoaded('Multilang') ? $this->model->getModule('Multilang') : false;
-		$lang = $multilang ? $multilang->lang : 'it';
+		if (isset($options['lang']) and $this->model->isLoaded('Multilang')) {
+			$lang = $this->model->getModule('Multilang')->lang;
+			if ($options['lang'] !== $lang)
+				return false;
+		}
 
-		if ($opt['lang'] !== $lang)
+		if (!empty($options['joins']))
 			return false;
-		if (!empty($opt['joins']))
-			return false;
-		if ($opt['limit']) {
-			if (!preg_match('/^[0-9]+(,[0-9+])?$/', $opt['limit']))
+
+		if ($options['limit'] ?? null) {
+			if (!preg_match('/^[0-9]+(,[0-9+])?$/', $options['limit']))
 				return false;
 		}
 		return true;
@@ -1421,90 +1452,149 @@ class Db extends Module
 	/**
 	 * @param string $table
 	 * @param array $where
-	 * @param array $opt
+	 * @param array $options
 	 * @return array|\Generator|bool
-	 * @throws \Model\Core\Exception
 	 */
-	private function select_cache(string $table, array $where = [], array $opt = [])
+	private function select_cache(string $table, array $where = [], array $options = [])
 	{
-		$tableModel = $this->getTable($table);
-
 		if (!isset($this->n_tables[$table . '-cache']))
 			$this->n_tables[$table . '-cache'] = 1;
 		else
 			$this->n_tables[$table . '-cache']++;
 
-		$results = [];
-		foreach ($this->cachedLists[$table] as $row) {
-			if (empty($where))
-				$verified = true;
-			else {
-				switch ($opt['operator']) {
-					case 'AND':
-						$verified = true;
-						foreach ($where as $k => $v)
-							if ((string)$row[$k] != (string)$v) $verified = false;
-						break;
-					case 'OR':
-						$verified = false;
-						foreach ($where as $k => $v)
-							if ((string)$row[$k] == (string)$v) $verified = true;
-						break;
-				}
-			}
-			if ($verified) {
-				if ($opt['multiple']) {
-					if (isset($row[$tableModel->primary])) $results[$row[$tableModel->primary]] = $row;
-					else $results[] = $row;
+		if (!isset($this->cachedTables[$table]))
+			$this->cachedTables[$table] = $this->select_all($table, [], ['stream' => false, 'ignoreCache' => true]);
+
+		$cache = $this->cachedTables[$table];
+
+		if ($options['order_by']) {
+			$orderBy = str_word_count($options['order_by'], 1, '0123456789_');
+			if (count($orderBy) == 1) $orderBy = [$orderBy[0], 'ASC'];
+			$orderBy0 = $orderBy[0];
+			$orderBy1 = strtoupper($orderBy[1]);
+
+			uasort($cache, function ($a, $b) use ($orderBy0, $orderBy1) {
+				if ($a[$orderBy0] == $b[$orderBy0]) return 0;
+				if (is_numeric($a[$orderBy0]) and is_numeric($b[$orderBy0])) {
+					switch ($orderBy1) {
+						case 'DESC':
+							return $a[$orderBy0] < $b[$orderBy0] ? 1 : -1;
+							break;
+						default:
+							return $a[$orderBy0] > $b[$orderBy0] ? 1 : -1;
+							break;
+					}
 				} else {
-					if ($opt['field']) return $row[$opt['field']];
-					else return $row;
+					$cmp = strcasecmp($a[$orderBy0], $b[$orderBy0]);
+					if ($orderBy1 == 'DESC') $cmp *= -1;
+					return $cmp;
 				}
+			});
+		}
+
+		$results = [];
+		foreach ($cache as $row) {
+			if (!$this->isCachedRowMatching($row, $where, $options['operator'] ?? 'AND'))
+				continue;
+
+			if ($options['multiple']) {
+				$results[] = $row;
+			} else {
+				if ($options['field']) return $row[$options['field']];
+				else return $row;
 			}
 		}
-		if ($opt['multiple']) {
-			if ($opt['order_by']) {
-				$ordinamento = str_word_count($opt['order_by'], 1, '0123456789_');
-				if (count($ordinamento) == 1) $ordinamento = [$ordinamento[0], 'ASC'];
-				$ordinamento0 = $ordinamento[0];
-				$ordinamento1 = strtoupper($ordinamento[1]);
 
-				uasort($results, function ($a, $b) use ($ordinamento0, $ordinamento1) {
-					if ($a[$ordinamento0] == $b[$ordinamento0]) return 0;
-					if (is_numeric($a[$ordinamento0]) and is_numeric($b[$ordinamento0])) {
-						switch ($ordinamento1) {
-							case 'DESC':
-								return $a[$ordinamento0] < $b[$ordinamento0] ? 1 : -1;
-								break;
-							default:
-								return $a[$ordinamento0] > $b[$ordinamento0] ? 1 : -1;
-								break;
-						}
-					} else {
-						$cmp = strcasecmp($a[$ordinamento0], $b[$ordinamento0]);
-						if ($ordinamento1 == 'DESC') $cmp *= -1;
-						return $cmp;
-					}
-				});
-			}
-			if ($opt['limit']) {
-				if (is_numeric($opt['limit'])) {
-					$return = array_slice($results, 0, $opt['limit']);
+		if ($options['multiple']) {
+			if ($options['limit']) {
+				if (is_numeric($options['limit'])) {
+					$return = array_slice($results, 0, $options['limit']);
 				} else {
-					$limit = explode(',', $opt['limit']);
+					$limit = explode(',', $options['limit']);
 					$return = array_slice($results, $limit[0], $limit[1]);
 				}
 			} else {
 				$return = $results;
 			}
 
-			if (isset($opt['stream']) and $opt['stream']) {
+			if (isset($options['stream']) and $options['stream']) {
 				return $this->streamCacheResults($return);
 			} else {
 				return $return;
 			}
 		} else {
 			return false;
+		}
+	}
+
+	/**
+	 * @param string $table
+	 * @param array $where
+	 * @param array $options
+	 */
+	private function delete_cache(string $table, array $where = [], array $options = [])
+	{
+		foreach ($this->cachedTables[$table] as $idx => $row) {
+			if ($this->isCachedRowMatching($row, $where, $options['operator'] ?? 'AND'))
+				unset($this->cachedTables[$table][$idx]);
+		}
+	}
+
+	/**
+	 * @param string $table
+	 * @param array $data
+	 */
+	private function insert_cache(string $table, array $data = [])
+	{
+		$this->cachedTables[$table][] = $data;
+	}
+
+	/**
+	 * @param string $table
+	 * @param array $where
+	 * @param array $data
+	 * @param array $options
+	 */
+	private function update_cache(string $table, array $where = [], array $data = [], array $options = [])
+	{
+		foreach ($this->cachedTables[$table] as $idx => $row) {
+			if (!$this->isCachedRowMatching($row, $where, $options['operator'] ?? 'AND'))
+				continue;
+
+			$this->cachedTables[$table][$idx] = array_merge($row, $data);
+		}
+	}
+
+	/**
+	 * @param array $row
+	 * @param array $where
+	 * @param string $operator
+	 * @return bool
+	 */
+	private function isCachedRowMatching(array $row, array $where, string $operator = 'AND'): bool
+	{
+		if (empty($where)) {
+			return true;
+		} else {
+			switch ($operator) {
+				case 'AND':
+					foreach ($where as $k => $v) {
+						if ((string)$row[$k] != (string)$v)
+							return false;
+					}
+					return true;
+					break;
+				case 'OR':
+					foreach ($where as $k => $v) {
+						if ((string)$row[$k] == (string)$v)
+							return true;
+					}
+					return false;
+					break;
+				default:
+					$this->model->error('Unknown operator');
+					break;
+			}
 		}
 	}
 
@@ -1523,14 +1613,21 @@ class Db extends Module
 	 */
 	private function changedTable(string $table)
 	{
-		if (in_array($table, $this->options['listCache']) and isset($this->cachedLists[$table]))
-			unset($this->cachedLists[$table]);
 		if (isset($this->queryCache[$table]))
 			$this->queryCache[$table] = [];
 
 		$this->trigger('changedTable', [
 			'table' => $table,
 		]);
+	}
+
+	/**
+	 * @param string $table
+	 */
+	private function flushTableCache(string $table)
+	{
+		if (isset($this->cachedTables[$table]))
+			unset($this->cachedTables[$table]);
 	}
 
 	/**
@@ -1547,7 +1644,6 @@ class Db extends Module
 	 * @param string $k
 	 * @param array $opt
 	 * @return string
-	 * @throws \Model\Core\Exception
 	 */
 	private function elaborateField(string $table, string $k, array $opt = []): string
 	{
@@ -1618,7 +1714,6 @@ class Db extends Module
 	/**
 	 * @param mixed $v
 	 * @return string
-	 * @throws \Model\Core\Exception
 	 */
 	private function elaborateValue($v): string
 	{
@@ -1666,7 +1761,6 @@ class Db extends Module
 	 * @param string $glue
 	 * @param array $options
 	 * @return string
-	 * @throws \Model\Core\Exception
 	 */
 	public function makeSqlString(string $table, array $array, string $glue, array $options = []): string
 	{
@@ -1812,7 +1906,6 @@ class Db extends Module
 	 * @param string $table
 	 * @param array $data
 	 * @return array
-	 * @throws \Model\Core\Exception
 	 */
 	private function filterColumns(string $table, array $data): array
 	{
@@ -1863,7 +1956,6 @@ class Db extends Module
 	 * @param string $table
 	 * @param bool $throw
 	 * @return Table|null
-	 * @throws \Model\Core\Exception
 	 */
 	public function getTable(string $table, bool $throw = true): ?Table
 	{
@@ -1887,7 +1979,6 @@ class Db extends Module
 	 * @param string $table
 	 * @param int $id
 	 * @return int
-	 * @throws \Model\Core\Exception
 	 */
 	public function getVersionLock(string $table, int $id): int
 	{
