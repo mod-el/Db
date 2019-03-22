@@ -32,7 +32,8 @@ class Db extends Module
 	/** @var array */
 	public $options = [
 		'db' => 'primary',
-		'listCache' => [],
+		'listCache' => [], // Deprecated
+		'cache-tables' => [],
 		'autoHide' => [],
 		'direct-pdo' => false,
 		'query-limit' => 100,
@@ -73,8 +74,13 @@ class Db extends Module
 					throw new \Exception('Missing database configuration for ' . $options['db'] . ' database!');
 
 				$configOptions = $config['databases'][$this->options['db']];
+
 				if (isset($configOptions['listCache']))
 					$this->options['listCache'] = array_unique(array_merge($configOptions['listCache'], $this->options['listCache']));
+				if (isset($configOptions['cache-tables']))
+					$this->options['cache-tables'] = array_unique(array_merge($configOptions['cache-tables'], $this->options['cache-tables']));
+				$this->options['cache-tables'] = array_unique(array_merge($this->options['listCache'], $this->options['cache-tables']));
+
 				if (isset($configOptions['autoHide']))
 					$this->options['autoHide'] = array_unique(array_merge($configOptions['autoHide'], $this->options['autoHide']));
 				$this->options = array_merge($configOptions, $this->options);
@@ -91,7 +97,7 @@ class Db extends Module
 				$this->unique_id = preg_replace('/[^A-Za-z0-9._-]/', '', $this->options['host'] . '-' . $this->options['database']);
 			}
 
-			$this->tablesToCache = $this->options['listCache'];
+			$this->tablesToCache = $this->options['cache-tables'];
 
 			if (!isset($this->options['user-filter']))
 				$this->options['user-filter'] = null;
