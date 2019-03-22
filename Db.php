@@ -1479,7 +1479,7 @@ class Db extends Module
 			$orderBy0 = $orderBy[0];
 			$orderBy1 = strtoupper($orderBy[1]);
 
-			uasort($cache, function ($a, $b) use ($orderBy0, $orderBy1) {
+			usort($cache, function ($a, $b) use ($orderBy0, $orderBy1) {
 				if ($a[$orderBy0] == $b[$orderBy0]) return 0;
 				if (is_numeric($a[$orderBy0]) and is_numeric($b[$orderBy0])) {
 					switch ($orderBy1) {
