@@ -640,7 +640,7 @@ class Db extends Module
 		try {
 			$this->query($qry, $table, 'DELETE', $options);
 
-			if ($this->canUseCache($table, $where, $options)) {
+			if (isset($this->cachedTables[$table])) {
 				if ($this->canUseCache($table, $where, $options))
 					$this->delete_cache($table, $where, $options);
 				else
