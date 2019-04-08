@@ -1475,35 +1475,31 @@ class Db extends Module
 
 		if ($options['order_by']) {
 			if (strtoupper($options['order_by']) === 'RAND()') {
-				$orderBy0 = 'RAND()';
-				$orderBy1 = '';
+				shuffle($cache);
 			} else {
 				$orderBy = str_word_count($options['order_by'], 1, '0123456789_');
 				if (count($orderBy) === 1) $orderBy = [$orderBy[0], 'ASC'];
 				$orderBy0 = $orderBy[0];
 				$orderBy1 = strtoupper($orderBy[1]);
-			}
 
-			usort($cache, function ($a, $b) use ($orderBy0, $orderBy1) {
-				if ($orderBy0 === 'RAND()')
-					return mt_rand(-1, 1);
-
-				if ($a[$orderBy0] == $b[$orderBy0]) return 0;
-				if (is_numeric($a[$orderBy0]) and is_numeric($b[$orderBy0])) {
-					switch ($orderBy1) {
-						case 'DESC':
-							return $a[$orderBy0] < $b[$orderBy0] ? 1 : -1;
-							break;
-						default:
-							return $a[$orderBy0] > $b[$orderBy0] ? 1 : -1;
-							break;
+				usort($cache, function ($a, $b) use ($orderBy0, $orderBy1) {
+					if ($a[$orderBy0] == $b[$orderBy0]) return 0;
+					if (is_numeric($a[$orderBy0]) and is_numeric($b[$orderBy0])) {
+						switch ($orderBy1) {
+							case 'DESC':
+								return $a[$orderBy0] < $b[$orderBy0] ? 1 : -1;
+								break;
+							default:
+								return $a[$orderBy0] > $b[$orderBy0] ? 1 : -1;
+								break;
+						}
+					} else {
+						$cmp = strcasecmp($a[$orderBy0], $b[$orderBy0]);
+						if ($orderBy1 == 'DESC') $cmp *= -1;
+						return $cmp;
 					}
-				} else {
-					$cmp = strcasecmp($a[$orderBy0], $b[$orderBy0]);
-					if ($orderBy1 == 'DESC') $cmp *= -1;
-					return $cmp;
-				}
-			});
+				});
+			}
 		}
 
 		$results = [];
