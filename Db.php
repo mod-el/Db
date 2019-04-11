@@ -34,6 +34,7 @@ class Db extends Module
 		'db' => 'primary',
 		'listCache' => [], // Deprecated
 		'cache-tables' => [],
+		'linked-tables' => [],
 		'autoHide' => [],
 		'direct-pdo' => false,
 		'query-limit' => 100,
@@ -83,6 +84,10 @@ class Db extends Module
 
 				if (isset($configOptions['autoHide']))
 					$this->options['autoHide'] = array_unique(array_merge($configOptions['autoHide'], $this->options['autoHide']));
+
+				if (isset($configOptions['linked-tables']))
+					$this->options['linked-tables'] = array_unique(array_merge($configOptions['linked-tables'], $this->options['linked-tables']));
+
 				$this->options = array_merge($configOptions, $this->options);
 
 				$this->db = new \PDO('mysql:host=' . $this->options['host'] . ';dbname=' . $this->options['database'] . ';charset=utf8', $this->options['username'], $this->options['password'], [
@@ -750,6 +755,17 @@ class Db extends Module
 				$sel_str .= ',' . implode(',', $ml['fields']);
 
 			$join_str .= ' LEFT OUTER JOIN `' . $table . $ml['suffix'] . '` AS lang ON lang.`' . $this->makeSafe($ml['keyfield']) . '` = t.`id` AND lang.`' . $this->makeSafe($ml['lang']) . '` LIKE ' . $this->db->quote($options['lang']);
+		}
+
+		if (in_array($table, $this->options['linked-tables'])) {
+			$customTableModel = $this->getTable($table . '_custom');
+			foreach ($customTableModel->columns as $column_name => $column) {
+				if ($column_name === $customTableModel->primary or $column_name === 'parent')
+					continue;
+
+				$sel_str .= ',custom.`' . $column_name . '`';
+			}
+			$join_str .= ' LEFT OUTER JOIN `' . $table . '_custom` AS custom ON custom.`parent` = t.`id`';
 		}
 
 		$joins = $this->elaborateJoins($table, $options['joins']);
