@@ -1817,9 +1817,9 @@ class Db extends Module
 							} else {
 								$operator = $v[0];
 
-								if (strtoupper($operator) === 'IN') {
+								if (in_array(trim(strtoupper($operator)), ['IN', 'NOT IN'])) {
 									if (!is_array($v[1]))
-										$this->model->error('Expected array after a "in" clause');
+										$this->model->error('Expected array after a "' . trim($operator) . '" clause');
 
 									$alreadyParsed = true;
 									$v[1] = '(' . implode(',', array_map(function ($el) {
