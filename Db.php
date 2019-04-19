@@ -10,7 +10,7 @@ class Db extends Module
 	public $unique_id;
 	/** @var \PDO */
 	protected $db;
-	/** @var array */
+	/** @var Table[] */
 	protected $tables = [];
 
 	/** @var int */
@@ -760,12 +760,12 @@ class Db extends Module
 		if (in_array($table, $this->options['linked-tables'])) {
 			$customTableModel = $this->getTable($table . '_custom');
 			foreach ($customTableModel->columns as $column_name => $column) {
-				if ($column_name === $customTableModel->primary or $column_name === 'parent')
+				if ($column_name === $customTableModel->primary)
 					continue;
 
 				$sel_str .= ',custom.`' . $column_name . '`';
 			}
-			$join_str .= ' LEFT OUTER JOIN `' . $table . '_custom` AS custom ON custom.`parent` = t.`id`';
+			$join_str .= ' LEFT OUTER JOIN `' . $table . '_custom` AS custom ON custom.`' . $customTableModel->primary . '` = t.`' . $tableModel->primary . '`';
 		}
 
 		$joins = $this->elaborateJoins($table, $options['joins']);
@@ -1991,6 +1991,17 @@ class Db extends Module
 				if (!isset($foreign_keys))
 					$foreign_keys = [];
 				$this->tables[$table] = new Table($table, $table_columns, $foreign_keys);
+
+				if (in_array($table, $this->options['linked-tables'])) {
+					$customTableModel = $this->getTable($table . '_custom');
+					foreach ($customTableModel->columns as $k => $column) {
+						if ($k === $customTableModel->primary)
+							continue;
+						$this->tables[$table]->columns[$k] = $column;
+					}
+
+					$this->tables[$table]->foreign_keys = array_merge($this->tables[$table]->foreign_keys, $customTableModel->foreign_keys);
+				}
 			} else {
 				if ($throw)
 					$this->model->error('Can\'t find table model for "' . entities($table) . '" in cache.');
