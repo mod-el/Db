@@ -774,6 +774,13 @@ class Db extends Module
 
 			$this->query($qry, $table, 'DELETE', $options);
 
+			if (!in_array($table, $this->options['autoHide']) and array_key_exists($table, $this->options['linked-tables'])) {
+				$linked_table = $this->options['linked-tables'][$table]['with'];
+
+				$qry = 'DELETE `linked` FROM `' . $this->makeSafe($linked_table) . '` linked INNER JOIN `'.$this->makeSafe($table).'` t' . $where_str;
+				$this->query($qry, $linked_table, 'DELETE', $options);
+			}
+
 			if (isset($this->cachedTables[$table])) {
 				if ($this->canUseCache($table, $where, $options))
 					$this->delete_cache($table, $where, $options);
