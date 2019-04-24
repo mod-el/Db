@@ -100,6 +100,25 @@ class Db extends Module
 				]);
 				$this->name = $this->options['database'];
 				$this->unique_id = preg_replace('/[^A-Za-z0-9._-]/', '', $this->options['host'] . '-' . $this->options['database']);
+
+				$linkedTables = [];
+				foreach ($this->options['linked-tables'] as $k => $v) {
+					if (is_numeric($k)) {
+						$linkedTables[$v] = [
+							'with' => $v . '_custom',
+						];
+					} else {
+						if (!is_array($v))
+							$v = ['with' => $v];
+
+						$linkedTables[$k] = array_merge([
+							'with' => $k . '_custom',
+						], $v);
+					}
+				}
+				$this->options['linked-tables'] = $linkedTables;
+				foreach ($this->options['linked-tables'] as $table => $tableOptions)
+					$this->checkLinkedTableMultilang($table);
 			}
 
 			$this->tablesToCache = $this->options['cache-tables'];
@@ -291,12 +310,14 @@ class Db extends Module
 		if ($data['multilang']) {
 			$multilangTable = $this->model->_Multilang->getTableFor($table);
 			$multilangOptions = $this->model->_Multilang->getTableOptionsFor($table);
-			foreach ($data['multilang'] as $lang => $multilangData) {
+			foreach ($data['multilang'] as $lang => $multilangData)
 				$this->checkDbData($multilangTable, $multilangData, $options);
-			}
 		}
 
 		if ($options['defer'] !== null) {
+			if (array_key_exists($table, $this->options['linked-tables']))
+				$this->model->error('Cannot defer linked tables');
+
 			if ($data['multilang'])
 				$this->model->error('Cannot defer inserts with multilang fields');
 
@@ -347,16 +368,56 @@ class Db extends Module
 				$this->query($qry, $multilangTable, 'INSERT', $options);
 			}
 
+			if (isset($this->cachedTables[$table])) {
+				$dataForCache = array_merge($data['data'], count($data['multilang']) > 0 ? reset($data['multilang']) : []);
+				$dataForCache[$tableModel->primary] = $id;
+			}
+
+			if (array_key_exists($table, $this->options['linked-tables'])) {
+				$custom_table = $this->options['linked-tables'][$table]['with'];
+				$custom_data = $this->filterColumns($custom_table, $data['data']);
+
+				$qry = $this->makeQueryForInsert($custom_table, [$custom_data['data']], $options);
+				if (!$qry)
+					$this->model->error('Error while generating query for custom table insert');
+
+				if ($options['debug'] and DEBUG_MODE)
+					echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
+
+				$id = $this->query($qry, $custom_table, 'INSERT', $options);
+
+				if ($custom_data['multilang']) {
+					$multilangTable = $this->model->_Multilang->getTableFor($custom_table);
+					$multilangOptions = $this->model->_Multilang->getTableOptionsFor($custom_table);
+					foreach ($custom_data['multilang'] as $lang => $multilangData)
+						$this->checkDbData($multilangTable, $multilangData, $options);
+
+					foreach ($custom_data['multilang'] as $lang => $multilangData) {
+						$multilangData[$multilangOptions['keyfield']] = $id;
+						$multilangData[$multilangOptions['lang']] = $lang;
+
+						$qry = $this->makeQueryForInsert($multilangTable, [$multilangData], $options);
+						if (!$qry)
+							$this->model->error('Error while generating query for multilang insert');
+
+						if ($options['debug'] and DEBUG_MODE)
+							echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
+
+						$this->query($qry, $multilangTable, 'INSERT', $options);
+					}
+				}
+
+				if (isset($this->cachedTables[$table]))
+					$dataForCache = array_merge($dataForCache, $custom_data['data'], count($custom_data['multilang']) > 0 ? reset($custom_data['multilang']) : []);
+			}
+
 			$this->trigger('inserted', [
 				'table' => $table,
 				'id' => $id,
 			]);
 
-			if (isset($this->cachedTables[$table])) {
-				$dataForCache = array_merge($data['data'], count($data['multilang']) > 0 ? reset($data['multilang']) : []);
-				$dataForCache[$tableModel->primary] = $id;
+			if (isset($this->cachedTables[$table]))
 				$this->insert_cache($table, $dataForCache);
-			}
 
 			$this->changedTable($table);
 
@@ -757,15 +818,15 @@ class Db extends Module
 			$join_str .= ' LEFT OUTER JOIN `' . $table . $ml['suffix'] . '` AS lang ON lang.`' . $this->makeSafe($ml['keyfield']) . '` = t.`id` AND lang.`' . $this->makeSafe($ml['lang']) . '` LIKE ' . $this->db->quote($options['lang']);
 		}
 
-		if (in_array($table, $this->options['linked-tables'])) {
-			$customTableModel = $this->getTable($table . '_custom');
+		if (array_key_exists($table, $this->options['linked-tables'])) {
+			$customTableModel = $this->getTable($this->options['linked-tables'][$table]['with']);
 			foreach ($customTableModel->columns as $column_name => $column) {
 				if ($column_name === $customTableModel->primary)
 					continue;
 
 				$sel_str .= ',custom.`' . $column_name . '`';
 			}
-			$join_str .= ' LEFT OUTER JOIN `' . $table . '_custom` AS custom ON custom.`' . $customTableModel->primary . '` = t.`' . $tableModel->primary . '`';
+			$join_str .= ' LEFT OUTER JOIN `' . $this->options['linked-tables'][$table]['with'] . '` AS custom ON custom.`' . $customTableModel->primary . '` = t.`' . $tableModel->primary . '`';
 		}
 
 		$joins = $this->elaborateJoins($table, $options['joins']);
@@ -1407,6 +1468,47 @@ class Db extends Module
 
 	/**
 	 * @param string $table
+	 * @param array $options
+	 */
+	public function linkTable(string $table, array $options = [])
+	{
+		$options = array_merge([
+			'with' => $table . '_custom',
+		], $options);
+
+		$this->options['linked-tables'][$table] = $options;
+		$this->checkLinkedTableMultilang($table);
+	}
+
+	/**
+	 * @param string $table
+	 */
+	private function checkLinkedTableMultilang(string $table)
+	{
+		if (!isset($this->options['linked-tables'][$table]))
+			return;
+
+		$customTable = $this->options['linked-tables'][$table]['with'];
+		if ($this->model->isLoaded('Multilang') and !array_key_exists($customTable, $this->model->_Multilang->tables)) {
+			$this->model->_Multilang->tables[$customTable] = [
+				'keyfield' => 'parent',
+				'lang' => 'lang',
+				'suffix' => '_texts',
+				'fields' => [],
+			];
+
+			$customTableModel = $this->getTable($customTable . '_texts');
+			foreach ($customTableModel->columns as $k => $column) {
+				if ($k === $customTableModel->primary or $k === 'parent' or $k === 'lang')
+					continue;
+
+				$this->model->_Multilang->tables[$customTable]['fields'][] = $k;
+			}
+		}
+	}
+
+	/**
+	 * @param string $table
 	 */
 	public function cacheTable(string $table)
 	{
@@ -1992,8 +2094,8 @@ class Db extends Module
 					$foreign_keys = [];
 				$this->tables[$table] = new Table($table, $table_columns, $foreign_keys);
 
-				if (in_array($table, $this->options['linked-tables'])) {
-					$customTableModel = $this->getTable($table . '_custom');
+				if (array_key_exists($table, $this->options['linked-tables'])) {
+					$customTableModel = $this->getTable($this->options['linked-tables'][$table]['with']);
 					foreach ($customTableModel->columns as $k => $column) {
 						if ($k === $customTableModel->primary)
 							continue;
