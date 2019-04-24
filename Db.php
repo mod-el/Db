@@ -374,25 +374,26 @@ class Db extends Module
 			}
 
 			if (array_key_exists($table, $this->options['linked-tables'])) {
-				$custom_table = $this->options['linked-tables'][$table]['with'];
-				$custom_data = $this->filterColumns($custom_table, $data['data']);
+				$linked_table = $this->options['linked-tables'][$table]['with'];
+				$linkedTableModel = $this->getTable($linked_table);
+				$data['custom-data'][$linkedTableModel->primary] = $id;
 
-				$qry = $this->makeQueryForInsert($custom_table, [$custom_data['data']], $options);
+				$qry = $this->makeQueryForInsert($linked_table, [$data['custom-data']], $options);
 				if (!$qry)
 					$this->model->error('Error while generating query for custom table insert');
 
 				if ($options['debug'] and DEBUG_MODE)
 					echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
 
-				$id = $this->query($qry, $custom_table, 'INSERT', $options);
+				$id = $this->query($qry, $linked_table, 'INSERT', $options);
 
-				if ($custom_data['multilang']) {
-					$multilangTable = $this->model->_Multilang->getTableFor($custom_table);
-					$multilangOptions = $this->model->_Multilang->getTableOptionsFor($custom_table);
-					foreach ($custom_data['multilang'] as $lang => $multilangData)
+				if ($data['custom-multilang']) {
+					$multilangTable = $this->model->_Multilang->getTableFor($linked_table);
+					$multilangOptions = $this->model->_Multilang->getTableOptionsFor($linked_table);
+					foreach ($data['custom-multilang'] as $lang => $multilangData)
 						$this->checkDbData($multilangTable, $multilangData, $options);
 
-					foreach ($custom_data['multilang'] as $lang => $multilangData) {
+					foreach ($data['custom-multilang'] as $lang => $multilangData) {
 						$multilangData[$multilangOptions['keyfield']] = $id;
 						$multilangData[$multilangOptions['lang']] = $lang;
 
@@ -408,7 +409,7 @@ class Db extends Module
 				}
 
 				if (isset($this->cachedTables[$table]))
-					$dataForCache = array_merge($dataForCache, $custom_data['data'], count($custom_data['multilang']) > 0 ? reset($custom_data['multilang']) : []);
+					$dataForCache = array_merge($dataForCache, $data['custom-data'], count($data['custom-multilang']) > 0 ? reset($data['custom-multilang']) : []);
 			}
 
 			$this->trigger('inserted', [
@@ -499,9 +500,6 @@ class Db extends Module
 			} else {
 				$values = [];
 				foreach ($data as $k => $v) {
-					if (!isset($tableModel->columns[$k]) or !$tableModel->columns[$k]['real'])
-						continue;
-
 					if (!$keys_set)
 						$keys[] = $this->elaborateField($table, $k);
 
@@ -626,11 +624,61 @@ class Db extends Module
 				}
 			}
 
+			if (array_key_exists($table, $this->options['linked-tables'])) {
+				$linked_table = $this->options['linked-tables'][$table]['with'];
+				$linkedTableModel = $this->getTable($linked_table);
+
+				if ($data['custom-data']) {
+					$qry = 'UPDATE `' . $this->makeSafe($linked_table) . '` AS `c` INNER JOIN `' . $this->makeSafe($table) . '` AS `t` ON `t`.`' . $tableModel->primary . '` = `c`.`' . $linkedTableModel->primary . '` SET ' . $this->makeSqlString($linked_table, $data['custom-data'], ',', ['for_where' => false, 'main_alias' => 'c']) . ($where_str ? ' WHERE ' . $where_str : '');
+
+					if ($options['debug'] and DEBUG_MODE)
+						echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
+
+					$this->query($qry, $table, 'UPDATE', $options);
+				}
+
+				if ($data['custom-multilang']) {
+					$multilangTable = $this->model->_Multilang->getTableFor($linked_table);
+					$multilangOptions = $this->model->_Multilang->getTableOptionsFor($linked_table);
+
+					foreach ($data['custom-multilang'] as $lang => $multilangData) {
+						if (!$multilangData)
+							continue;
+
+						$this->checkDbData($multilangTable, $multilangData, $options);
+
+						$ml_where_str = ' WHERE `ml`.`' . $this->makeSafe($multilangOptions['lang']) . '` = ' . $this->db->quote($lang);
+						if ($where_str)
+							$ml_where_str .= ' AND (' . $where_str . ')';
+						$qry = 'UPDATE `' . $this->makeSafe($multilangTable) . '` AS `ml` INNER JOIN `' . $this->makeSafe($table) . '` AS `t` ON `t`.`' . $tableModel->primary . '` = `ml`.`' . $this->makeSafe($multilangOptions['keyfield']) . '` SET ' . $this->makeSqlString($table, $multilangData, ',', ['for_where' => false, 'main_alias' => 'ml']) . $ml_where_str;
+
+						if ($options['debug'] and DEBUG_MODE)
+							echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
+
+						$result = $this->query($qry, $table, 'UPDATE', $options);
+						if ($result->rowCount() === 0 and isset($where[$tableModel->primary])) { // If there is no multilang row in the db, and I have the row id, I create one
+							$multilangWhere = [
+								$multilangOptions['keyfield'] => $where[$tableModel->primary],
+								$multilangOptions['lang'] => $lang,
+							];
+							if ($this->count($multilangTable, $multilangWhere) === 0) // I actually check that the row does not exist (rowCount can return 0 if the updated data are identical to the existing ones)
+								$this->insert($multilangTable, array_merge($multilangData, $multilangWhere));
+						}
+					}
+				}
+			}
+
 			if (isset($this->cachedTables[$table])) {
-				if ($this->canUseCache($table, $where, $options))
-					$this->update_cache($table, $where, array_merge($data['data'], count($data['multilang']) > 0 ? reset($data['multilang']) : []), $options);
-				else
+				if ($this->canUseCache($table, $where, $options)) {
+					$this->update_cache($table, $where, array_merge(
+						$data['data'],
+						count($data['multilang']) > 0 ? reset($data['multilang']) : [],
+						$data['custom-data'],
+						count($data['custom-multilang']) > 0 ? reset($data['custom-multilang']) : []
+					), $options);
+				} else {
 					$this->flushTableCache($table);
+				}
 			}
 
 			$this->changedTable($table);
@@ -2047,26 +2095,33 @@ class Db extends Module
 		$tableModel = $this->getTable($table);
 
 		$mainData = [];
+		$multilangData = [];
+		$customData = [];
+		$customMultilang = [];
+
 		foreach ($data as $k => $v) {
 			if (array_key_exists($k, $tableModel->columns)) {
 				$c = $tableModel->columns[$k];
 				if (isset($c['extra']) and stripos($c['extra'], 'GENERATED') !== false)
 					continue;
-				$mainData[$k] = $v;
+
+				if ($c['real'])
+					$mainData[$k] = $v;
+				elseif (array_key_exists($table, $this->options['linked-tables']))
+					$customData[$k] = $v;
 			}
 		}
 
-		$multilangData = [];
 		if ($this->model->isLoaded('Multilang') and array_key_exists($table, $this->model->_Multilang->tables)) {
 			foreach ($this->model->_Multilang->langs as $lang) {
 				$multilangData[$lang] = [];
+				$customMultilang[$lang] = [];
 			}
 
 			foreach ($data as $k => $v) {
 				if (in_array($k, $this->model->_Multilang->tables[$table]['fields'])) {
-					if (array_key_exists($k, $mainData)) { // A field cannot exist both in the main table and in the multilang table
+					if (array_key_exists($k, $mainData)) // A field cannot exist both in the main table and in the multilang table
 						unset($mainData[$k]);
-					}
 
 					if (!is_array($v)) {
 						$v = [
@@ -2074,8 +2129,25 @@ class Db extends Module
 						];
 					}
 
-					foreach ($v as $lang => $subValue) {
+					foreach ($v as $lang => $subValue)
 						$multilangData[$lang][$k] = $subValue;
+				}
+
+				if (array_key_exists($table, $this->options['linked-tables'])) {
+					$linkedTable = $this->options['linked-tables'][$table]['with'];
+
+					if (in_array($k, $this->model->_Multilang->tables[$linkedTable]['fields'])) {
+						if (array_key_exists($k, $customData)) // A field cannot exist both in the main table and in the multilang table
+							unset($customData[$k]);
+
+						if (!is_array($v)) {
+							$v = [
+								$this->model->_Multilang->lang => $v,
+							];
+						}
+
+						foreach ($v as $lang => $subValue)
+							$customMultilang[$lang][$k] = $subValue;
 					}
 				}
 			}
@@ -2084,6 +2156,8 @@ class Db extends Module
 		return [
 			'data' => $mainData,
 			'multilang' => $multilangData,
+			'custom-data' => $customData,
+			'custom-multilang' => $customMultilang,
 		];
 	}
 

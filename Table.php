@@ -25,6 +25,8 @@ class Table
 		foreach ($columns as $k => $c) {
 			if ($c['key'] == 'PRI')
 				$this->primary = $k;
+
+			$c['real'] = true; // For linked tables
 			$this->columns[$k] = $c;
 		}
 
