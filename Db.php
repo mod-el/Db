@@ -345,6 +345,8 @@ class Db extends Module
 		}
 
 		try {
+			$this->beginTransaction();
+
 			$qry = $this->makeQueryForInsert($table, [$data['data']], $options);
 			if (!$qry)
 				$this->model->error('Error while generating query for insert');
@@ -422,8 +424,11 @@ class Db extends Module
 
 			$this->changedTable($table);
 
+			$this->commit();
+
 			return $id;
 		} catch (\Exception $e) {
+			$this->rollBack();
 			$this->model->error('Error while inserting.', '<b>Error:</b> ' . getErr($e) . '<br /><b>Query:</b> ' . ($qry ?? 'Still undefined'));
 		}
 	}
@@ -437,6 +442,8 @@ class Db extends Module
 			return;
 
 		try {
+			$this->beginTransaction();
+
 			$options = $this->deferedInserts[$table]['options'];
 
 			$qry = $this->makeQueryForInsert($table, $this->deferedInserts[$table]['rows'], $options);
@@ -458,7 +465,10 @@ class Db extends Module
 			}
 
 			unset($this->deferedInserts[$table]);
+
+			$this->commit();
 		} catch (\Exception $e) {
+			$this->rollBack();
 			$this->model->error('Error while bulk inserting.', '<b>Error:</b> ' . getErr($e), ['details' => '<b>Query:</b> ' . ($qry ?? 'Still undefined')]);
 		}
 	}
@@ -568,30 +578,31 @@ class Db extends Module
 		if ($data['multilang']) {
 			$multilangTable = $this->model->_Multilang->getTableFor($table);
 			$multilangOptions = $this->model->_Multilang->getTableOptionsFor($table);
-			foreach ($data['multilang'] as $lang => $multilangData) {
+			foreach ($data['multilang'] as $lang => $multilangData)
 				$this->checkDbData($multilangTable, $multilangData, $options);
-			}
 		}
-
-		if ($options['version'] !== null and array_keys($where) === [$tableModel->primary]) {
-			$lastVersion = $this->getVersionLock($table, $where[$tableModel->primary]);
-
-			if ($lastVersion > $options['version'])
-				$this->model->error('A new version of this element has been saved in the meanwhile. Reload the page and try again.');
-
-			$this->insert('model_version_locks', [
-				'table' => $table,
-				'row' => $where[$tableModel->primary],
-				'version' => $options['version'] + 1,
-				'date' => date('Y-m-d H:i:s'),
-			]);
-		}
-
-		$where_str = $this->makeSqlString($table, $where, ' AND ', ['main_alias' => 't']);
-		if (empty($where_str) and !$options['confirm'])
-			$this->model->error('Tried to update full table without explicit confirm');
 
 		try {
+			$this->beginTransaction();
+
+			if ($options['version'] !== null and array_keys($where) === [$tableModel->primary]) {
+				$lastVersion = $this->getVersionLock($table, $where[$tableModel->primary]);
+
+				if ($lastVersion > $options['version'])
+					$this->model->error('A new version of this element has been saved in the meanwhile. Reload the page and try again.');
+
+				$this->insert('model_version_locks', [
+					'table' => $table,
+					'row' => $where[$tableModel->primary],
+					'version' => $options['version'] + 1,
+					'date' => date('Y-m-d H:i:s'),
+				]);
+			}
+
+			$where_str = $this->makeSqlString($table, $where, ' AND ', ['main_alias' => 't']);
+			if (empty($where_str) and !$options['confirm'])
+				$this->model->error('Tried to update full table without explicit confirm');
+
 			if ($data['data']) {
 				$qry = 'UPDATE `' . $this->makeSafe($table) . '` AS `t` SET ' . $this->makeSqlString($table, $data['data'], ',', ['for_where' => false]) . ($where_str ? ' WHERE ' . $where_str : '');
 
@@ -682,7 +693,10 @@ class Db extends Module
 			}
 
 			$this->changedTable($table);
+
+			$this->commit();
 		} catch (\Exception $e) {
+			$this->rollBack();
 			$this->model->error('Error while updating.', '<b>Error:</b> ' . getErr($e) . '<br /><b>Query:</b> ' . $qry);
 		}
 		return true;
@@ -756,6 +770,8 @@ class Db extends Module
 			echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
 
 		try {
+			$this->beginTransaction();
+
 			$this->query($qry, $table, 'DELETE', $options);
 
 			if (isset($this->cachedTables[$table])) {
@@ -766,7 +782,11 @@ class Db extends Module
 			}
 
 			$this->changedTable($table);
+
+			$this->commit();
 		} catch (\Exception $e) {
+			$this->rollBack();
+
 			$messaggio = 'Error while deleting';
 			$messaggio2 = getErr($e);
 			if (stripos($messaggio2, 'a foreign key constraint fails') !== false) {
