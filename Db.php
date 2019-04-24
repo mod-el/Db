@@ -479,10 +479,11 @@ class Db extends Module
 		$defaults = null;
 		$qry_rows = [];
 
+		$tableModel = $this->getTable($table);
+
 		foreach ($rows as $data) {
 			if ($data === []) {
 				if ($defaults === null) {
-					$tableModel = $this->getTable($table);
 					foreach ($tableModel->columns as $k => $c) {
 						if ($c['null']) {
 							$defaults[] = 'NULL';
@@ -498,6 +499,9 @@ class Db extends Module
 			} else {
 				$values = [];
 				foreach ($data as $k => $v) {
+					if (!isset($tableModel->columns[$k]) or !$tableModel->columns[$k]['real'])
+						continue;
+
 					if (!$keys_set)
 						$keys[] = $this->elaborateField($table, $k);
 
@@ -1296,8 +1300,11 @@ class Db extends Module
 	 */
 	private function normalizeTypesInSelect(string $table, array $row): array
 	{
-		if (!$this->getTable($table, false))
+		try {
+			$tableModel = $this->getTable($table);
+		} catch (\Exception $e) {
 			return $row;
+		}
 
 		$newRow = [];
 		foreach ($row as $k => $v) {
@@ -1305,8 +1312,8 @@ class Db extends Module
 				$k = substr($k, 7);
 
 			if ($v !== null and $v !== false) {
-				if (array_key_exists($k, $this->getTable($table)->columns)) {
-					$c = $this->getTable($table)->columns[$k];
+				if (array_key_exists($k, $tableModel->columns)) {
+					$c = $tableModel->columns[$k];
 					if (in_array($c['type'], ['double', 'float', 'decimal']))
 						$v = (float)$v;
 					if (in_array($c['type'], ['tinyint', 'smallint', 'mediumint', 'int', 'bigint', 'year']))
@@ -2082,10 +2089,9 @@ class Db extends Module
 
 	/**
 	 * @param string $table
-	 * @param bool $throw
 	 * @return Table|null
 	 */
-	public function getTable(string $table, bool $throw = true): ?Table
+	public function getTable(string $table): ?Table
 	{
 		if (!isset($this->tables[$table])) {
 			if (file_exists(__DIR__ . '/data/' . $this->unique_id . '/' . $table . '.php')) {
@@ -2097,18 +2103,16 @@ class Db extends Module
 				if (array_key_exists($table, $this->options['linked-tables'])) {
 					$customTableModel = $this->getTable($this->options['linked-tables'][$table]['with']);
 					foreach ($customTableModel->columns as $k => $column) {
-						if ($k === $customTableModel->primary)
+						if ($k === $customTableModel->primary or isset($this->tables[$table]->columns[$k]))
 							continue;
+						$column['real'] = false;
 						$this->tables[$table]->columns[$k] = $column;
 					}
 
 					$this->tables[$table]->foreign_keys = array_merge($this->tables[$table]->foreign_keys, $customTableModel->foreign_keys);
 				}
 			} else {
-				if ($throw)
-					$this->model->error('Can\'t find table model for "' . entities($table) . '" in cache.');
-				else
-					return null;
+				$this->model->error('Can\'t find table model for "' . entities($table) . '" in cache.');
 			}
 		}
 		return $this->tables[$table];
