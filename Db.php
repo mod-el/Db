@@ -777,7 +777,7 @@ class Db extends Module
 			if (!in_array($table, $this->options['autoHide']) and array_key_exists($table, $this->options['linked-tables'])) {
 				$linked_table = $this->options['linked-tables'][$table]['with'];
 
-				$qry = 'DELETE `linked` FROM `' . $this->makeSafe($linked_table) . '` linked INNER JOIN `'.$this->makeSafe($table).'` t' . $where_str;
+				$qry = 'DELETE `linked` FROM `' . $this->makeSafe($linked_table) . '` linked INNER JOIN `' . $this->makeSafe($table) . '` t' . $where_str;
 				$this->query($qry, $linked_table, 'DELETE', $options);
 			}
 
@@ -949,7 +949,27 @@ class Db extends Module
 			$cj++;
 		}
 
-		$make_options = ['auto_ml' => $options['auto_ml'], 'main_alias' => 't', 'joins' => $joins];
+		if (array_key_exists($table, $this->options['linked-tables'])) {
+			$custom_fields = [];
+			foreach ($customTableModel->columns as $column_name => $column) {
+				if ($column_name === $customTableModel->primary)
+					continue;
+				$custom_fields[] = $column_name;
+			}
+
+			$joins[] = [
+				'table' => $this->options['linked-tables'][$table]['with'],
+				'alias' => 'custom',
+				'fields' => $custom_fields,
+			];
+		}
+
+		$make_options = [
+			'auto_ml' => $options['auto_ml'],
+			'main_alias' => 't',
+			'joins' => $joins,
+		];
+
 		$where_str = $this->makeSqlString($table, $where, ' ' . $options['operator'] . ' ', $make_options);
 		if (in_array($table, $this->options['autoHide']))
 			$where_str = empty($where_str) ? 't.zk_deleted = 0' : '(' . $where_str . ') AND t.zk_deleted = 0';
@@ -1225,6 +1245,11 @@ class Db extends Module
 			$join_str .= ' LEFT OUTER JOIN `' . $table . $ml['suffix'] . '` lang ON lang.`' . $this->makeSafe($ml['keyfield']) . '` = t.id AND lang.`' . $this->makeSafe($ml['lang']) . '` LIKE ' . $this->db->quote($options['lang']);
 		}
 
+		if (array_key_exists($table, $this->options['linked-tables'])) {
+			$customTableModel = $this->getTable($this->options['linked-tables'][$table]['with']);
+			$join_str .= ' LEFT OUTER JOIN `' . $this->options['linked-tables'][$table]['with'] . '` AS custom ON custom.`' . $customTableModel->primary . '` = t.`' . $tableModel->primary . '`';
+		}
+
 		$joins = $this->elaborateJoins($table, $options['joins']);
 
 		$cj = 0;
@@ -1249,7 +1274,26 @@ class Db extends Module
 			$cj++;
 		}
 
-		$make_options = ['main_alias' => 't', 'joins' => $joins, 'auto_ml' => $options['auto_ml']];
+		if (array_key_exists($table, $this->options['linked-tables'])) {
+			$custom_fields = [];
+			foreach ($customTableModel->columns as $column_name => $column) {
+				if ($column_name === $customTableModel->primary)
+					continue;
+				$custom_fields[] = $column_name;
+			}
+
+			$joins[] = [
+				'table' => $this->options['linked-tables'][$table]['with'],
+				'alias' => 'custom',
+				'fields' => $custom_fields,
+			];
+		}
+
+		$make_options = [
+			'auto_ml' => $options['auto_ml'],
+			'main_alias' => 't',
+			'joins' => $joins,
+		];
 		$where_str = $this->makeSqlString($table, $where, ' ' . $options['operator'] . ' ', $make_options);
 
 		if (in_array($table, $this->options['autoHide']))
