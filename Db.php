@@ -889,23 +889,45 @@ class Db extends Module
 		$join_str = '';
 		if ($isMultilang) {
 			$ml = $multilang->tables[$table];
-			foreach ($ml['fields'] as $nf => $f)
-				$ml['fields'][$nf] = 'lang.' . $f;
-			if ($ml['fields'])
-				$sel_str .= ',' . implode(',', $ml['fields']);
-
-			$join_str .= ' LEFT OUTER JOIN `' . $table . $ml['suffix'] . '` AS lang ON lang.`' . $this->makeSafe($ml['keyfield']) . '` = t.`id` AND lang.`' . $this->makeSafe($ml['lang']) . '` LIKE ' . $this->db->quote($options['lang']);
+			$options['joins'][] = [
+				'type' => 'LEFT',
+				'table' => $table . $ml['suffix'],
+				'alias' => 'lang',
+				'full_on' => 'lang.`' . $this->makeSafe($ml['keyfield']) . '` = t.`' . $tableModel->primary . '` AND lang.`' . $this->makeSafe($ml['lang']) . '` LIKE ' . $this->db->quote($options['lang']),
+				'fields' => $ml['fields'],
+			];
 		}
 
 		if (array_key_exists($table, $this->options['linked-tables'])) {
+			$customTable = $this->options['linked-tables'][$table]['with'];
 			$customTableModel = $this->getTable($this->options['linked-tables'][$table]['with']);
+
+			$customFields = [];
 			foreach ($customTableModel->columns as $column_name => $column) {
 				if ($column_name === $customTableModel->primary)
 					continue;
-
-				$sel_str .= ',custom.`' . $column_name . '`';
+				$customFields[] = $column_name;
 			}
-			$join_str .= ' LEFT OUTER JOIN `' . $this->options['linked-tables'][$table]['with'] . '` AS custom ON custom.`' . $customTableModel->primary . '` = t.`' . $tableModel->primary . '`';
+
+			$options['joins'][] = [
+				'type' => 'LEFT',
+				'table' => $customTable,
+				'alias' => 'custom',
+				'on' => $tableModel->primary,
+				'join_field' => $customTableModel->primary,
+				'fields' => $customFields,
+			];
+
+			if ($isMultilang) {
+				$ml = $multilang->tables[$customTable];
+				$options['joins'][] = [
+					'type' => 'LEFT',
+					'table' => $customTable . $ml['suffix'],
+					'alias' => 'custom_lang',
+					'full_on' => 'custom_lang.`' . $this->makeSafe($ml['keyfield']) . '` = t.`' . $customTableModel->primary . '` AND lang.`' . $this->makeSafe($ml['lang']) . '` LIKE ' . $this->db->quote($options['lang']),
+					'fields' => $ml['fields'],
+				];
+			}
 		}
 
 		$joins = $this->elaborateJoins($table, $options['joins']);
@@ -947,21 +969,6 @@ class Db extends Module
 			}
 
 			$cj++;
-		}
-
-		if (array_key_exists($table, $this->options['linked-tables'])) {
-			$custom_fields = [];
-			foreach ($customTableModel->columns as $column_name => $column) {
-				if ($column_name === $customTableModel->primary)
-					continue;
-				$custom_fields[] = $column_name;
-			}
-
-			$joins[] = [
-				'table' => $this->options['linked-tables'][$table]['with'],
-				'alias' => 'custom',
-				'fields' => $custom_fields,
-			];
 		}
 
 		$make_options = [
@@ -1240,14 +1247,48 @@ class Db extends Module
 
 		$join_str = '';
 
-		if ($multilang and $options['auto_ml'] and array_key_exists($table, $multilang->tables)) {
+		$isMultilang = ($multilang and $options['auto_ml'] and array_key_exists($table, $multilang->tables));
+		if ($isMultilang) {
 			$ml = $multilang->tables[$table];
-			$join_str .= ' LEFT OUTER JOIN `' . $table . $ml['suffix'] . '` lang ON lang.`' . $this->makeSafe($ml['keyfield']) . '` = t.id AND lang.`' . $this->makeSafe($ml['lang']) . '` LIKE ' . $this->db->quote($options['lang']);
+			$options['joins'][] = [
+				'type' => 'LEFT',
+				'table' => $table . $ml['suffix'],
+				'alias' => 'lang',
+				'full_on' => 'lang.`' . $this->makeSafe($ml['keyfield']) . '` = t.`' . $tableModel->primary . '` AND lang.`' . $this->makeSafe($ml['lang']) . '` LIKE ' . $this->db->quote($options['lang']),
+				'fields' => $ml['fields'],
+			];
 		}
 
 		if (array_key_exists($table, $this->options['linked-tables'])) {
+			$customTable = $this->options['linked-tables'][$table]['with'];
 			$customTableModel = $this->getTable($this->options['linked-tables'][$table]['with']);
-			$join_str .= ' LEFT OUTER JOIN `' . $this->options['linked-tables'][$table]['with'] . '` AS custom ON custom.`' . $customTableModel->primary . '` = t.`' . $tableModel->primary . '`';
+
+			$customFields = [];
+			foreach ($customTableModel->columns as $column_name => $column) {
+				if ($column_name === $customTableModel->primary)
+					continue;
+				$customFields[] = $column_name;
+			}
+
+			$options['joins'][] = [
+				'type' => 'LEFT',
+				'table' => $customTable,
+				'alias' => 'custom',
+				'on' => $tableModel->primary,
+				'join_field' => $customTableModel->primary,
+				'fields' => $customFields,
+			];
+
+			if ($isMultilang) {
+				$ml = $multilang->tables[$customTable];
+				$options['joins'][] = [
+					'type' => 'LEFT',
+					'table' => $customTable . $ml['suffix'],
+					'alias' => 'custom_lang',
+					'full_on' => 'custom_lang.`' . $this->makeSafe($ml['keyfield']) . '` = t.`' . $customTableModel->primary . '` AND lang.`' . $this->makeSafe($ml['lang']) . '` LIKE ' . $this->db->quote($options['lang']),
+					'fields' => $ml['fields'],
+				];
+			}
 		}
 
 		$joins = $this->elaborateJoins($table, $options['joins']);
@@ -1272,21 +1313,6 @@ class Db extends Module
 				$join_str .= ' ' . $join['type'] . ' JOIN `' . $this->makeSafe($join['table']) . '` ' . $joinAlias . ' ON (' . $this->makeSqlString($table, $join_where, 'AND', ['joins' => $joins]) . ')';
 			}
 			$cj++;
-		}
-
-		if (array_key_exists($table, $this->options['linked-tables'])) {
-			$custom_fields = [];
-			foreach ($customTableModel->columns as $column_name => $column) {
-				if ($column_name === $customTableModel->primary)
-					continue;
-				$custom_fields[] = $column_name;
-			}
-
-			$joins[] = [
-				'table' => $this->options['linked-tables'][$table]['with'],
-				'alias' => 'custom',
-				'fields' => $custom_fields,
-			];
 		}
 
 		$make_options = [
