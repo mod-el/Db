@@ -924,7 +924,7 @@ class Db extends Module
 					'type' => 'LEFT',
 					'table' => $customTable . $ml['suffix'],
 					'alias' => 'custom_lang',
-					'full_on' => 'custom_lang.`' . $this->makeSafe($ml['keyfield']) . '` = t.`' . $customTableModel->primary . '` AND lang.`' . $this->makeSafe($ml['lang']) . '` LIKE ' . $this->db->quote($options['lang']),
+					'full_on' => 'custom_lang.`' . $this->makeSafe($ml['keyfield']) . '` = t.`' . $customTableModel->primary . '` AND custom_lang.`' . $this->makeSafe($ml['lang']) . '` LIKE ' . $this->db->quote($options['lang']),
 					'fields' => $ml['fields'],
 				];
 			}
