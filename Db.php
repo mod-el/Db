@@ -511,7 +511,7 @@ class Db extends Module
 				$values = [];
 				foreach ($data as $k => $v) {
 					if (!$keys_set)
-						$keys[] = $this->elaborateField($table, $k);
+						$keys[] = $this->elaborateField($k);
 
 					if ($v === null)
 						$values[] = 'NULL';
@@ -983,7 +983,7 @@ class Db extends Module
 		$where_str = empty($where_str) ? '' : ' WHERE ' . $where_str;
 
 		if ($options['distinct'])
-			$qry = 'SELECT DISTINCT ' . $this->elaborateField($table, $options['distinct'], $make_options) . ',';
+			$qry = 'SELECT DISTINCT ' . $this->elaborateField($options['distinct'], $make_options) . ',';
 		else
 			$qry = 'SELECT ';
 
@@ -1010,14 +1010,14 @@ class Db extends Module
 
 						if (is_numeric($field) and is_string($alias)) {
 							$field = $alias;
-							$alias = $this->elaborateField($table, 'zkaggr_' . $field, array_merge($make_options, ['add-alias' => false]));
+							$alias = $this->elaborateField('zkaggr_' . $field, array_merge($make_options, ['add-alias' => false]));
 						}
-						$qry .= strtoupper($f) . '(' . $this->elaborateField($table, $field, $make_options) . ') AS ' . $alias;
+						$qry .= strtoupper($f) . '(' . $this->elaborateField($field, $make_options) . ') AS ' . $alias;
 					}
 
 					$found = true;
 				} else {
-					$qry .= strtoupper($f) . '(' . $this->elaborateField($table, $options[$f], $make_options) . ')';
+					$qry .= strtoupper($f) . '(' . $this->elaborateField($options[$f], $make_options) . ')';
 					$singleField = true;
 					$found = true;
 					break;
@@ -1029,20 +1029,20 @@ class Db extends Module
 		if (!$found) {
 			if ($options['field'] !== false) {
 				$singleField = true;
-				$qry .= $this->elaborateField($table, $options['field'], $make_options);
+				$qry .= $this->elaborateField($options['field'], $make_options);
 			} elseif ($options['fields']) {
 				$fields = [];
 				foreach ($options['fields'] as $f)
-					$fields[] = $this->elaborateField($table, $f, $make_options);
+					$fields[] = $this->elaborateField($f, $make_options);
 				$qry .= implode(',', $fields);
 			} else {
 				$tempColumns = [];
 				foreach ($tableModel->columns as $k => $c) {
 					if ($c['type'] === 'point') {
 						$geometryColumns[] = $k;
-						$tempColumns[] = 'AsText(' . $this->elaborateField($table, $k, $make_options) . ') AS ' . $this->elaborateField($table, $k);
+						$tempColumns[] = 'AsText(' . $this->elaborateField($k, $make_options) . ') AS ' . $this->elaborateField($k);
 					} else {
-						$tempColumns[] = $this->elaborateField($table, $k, $make_options);
+						$tempColumns[] = $this->elaborateField($k, $make_options);
 					}
 				}
 				if (count($geometryColumns) > 0)
@@ -1327,7 +1327,7 @@ class Db extends Module
 		$where_str = empty($where_str) ? '' : ' WHERE ' . $where_str;
 
 		if ($options['distinct'])
-			$qry = 'SELECT COUNT(DISTINCT ' . $this->elaborateField($table, $options['distinct'], $make_options) . ') ';
+			$qry = 'SELECT COUNT(DISTINCT ' . $this->elaborateField($options['distinct'], $make_options) . ') ';
 		else
 			$qry = 'SELECT COUNT(*) ';
 
@@ -1920,12 +1920,11 @@ class Db extends Module
 	}
 
 	/**
-	 * @param string $table
 	 * @param string $k
 	 * @param array $opt
 	 * @return string
 	 */
-	private function elaborateField(string $table, string $k, array $opt = []): string
+	private function elaborateField(string $k, array $opt = []): string
 	{
 		$options = array_merge([
 			'auto_ml' => false,
@@ -1935,17 +1934,7 @@ class Db extends Module
 		], $opt);
 		$kr = '`' . $this->makeSafe($k) . '`';
 
-		$multilang = $this->model->isLoaded('Multilang') ? $this->model->getModule('Multilang') : false;
-
 		$changed = false;
-		if ($multilang and $options['auto_ml'] and array_key_exists($table, $multilang->tables)) {
-			$ml = $multilang->tables[$table];
-			if (in_array($k, $ml['fields'])) {
-				$kr = 'lang.' . $kr;
-				$changed = true;
-			}
-		}
-
 		$cj = 0;
 		foreach ($options['joins'] as $join) {
 			if (!isset($join['full_fields'])) {
@@ -2132,7 +2121,7 @@ class Db extends Module
 
 			if ($options['prefix'])
 				$k = $options['prefix'] . $k;
-			$k = $this->elaborateField($table, $k, $options);
+			$k = $this->elaborateField($k, $options);
 
 			if (!$alreadyParsed) {
 				if ($v1 === null) {
