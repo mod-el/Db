@@ -1165,6 +1165,11 @@ class Db extends Module
 			$tableModel->primary => $data[$tableModel->primary],
 		];
 
+		foreach (($options['joins'] ?? []) as $idx => $join) {
+			if ($join['alias'] === 'lang')
+				unset($options['joins'][$idx]);
+		}
+
 		foreach ($this->model->_Multilang->options['fallback'] as $l) {
 			if ($options['lang'] === $l)
 				continue;
