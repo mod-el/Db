@@ -2220,8 +2220,11 @@ class Db extends Module
 						];
 					}
 
-					foreach ($v as $lang => $subValue)
+					foreach ($v as $lang => $subValue) {
+						if (!in_array($lang, $this->model->_Multilang->langs))
+							continue;
 						$multilangData[$lang][$k] = $subValue;
+					}
 				}
 
 				if (array_key_exists($table, $this->options['linked-tables'])) {
@@ -2237,8 +2240,11 @@ class Db extends Module
 							];
 						}
 
-						foreach ($v as $lang => $subValue)
+						foreach ($v as $lang => $subValue) {
+							if (!in_array($lang, $this->model->_Multilang->langs))
+								continue;
 							$customMultilang[$lang][$k] = $subValue;
+						}
 					}
 				}
 			}
