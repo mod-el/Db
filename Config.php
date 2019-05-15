@@ -42,14 +42,17 @@ class Config extends Module_Config
 			if (!is_dir($path . 'data' . DIRECTORY_SEPARATOR . $db->unique_id))
 				mkdir($path . 'data' . DIRECTORY_SEPARATOR . $db->unique_id);
 
-			$references = array(); // References of each table (via foreign keys) in other tables
+			$migrate = new Migrate($db);
+			$migrate->exec();
+
+			$references = []; // References of each table (via foreign keys) in other tables
 			$tables = $db->query('SHOW TABLES');
 			foreach ($tables as $t) {
 				$table = $t['Tables_in_' . $db->name];
 
 				/*** COLONNE ***/
 				$tq = $db->query('EXPLAIN `' . $table . '`');
-				$columns = array();
+				$columns = [];
 				foreach ($tq as $c) {
 					if (preg_match('/^enum\(.+\).*$/i', $c['Type'])) {
 						$type = 'enum';
