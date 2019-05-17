@@ -5,6 +5,8 @@ abstract class Migration
 	/** @var Db */
 	private $db;
 	/** @var string */
+	public $migration_name;
+	/** @var string */
 	public $name;
 	/** @var int */
 	public $version;
@@ -19,8 +21,9 @@ abstract class Migration
 		$this->db = $db;
 
 		$class = explode('\\', get_class($this));
-		$class = explode('_', end($class));
+		$this->migration_name = end($class);
 
+		$class = explode('_', end($class));
 		$this->version = $class[1];
 
 		preg_match_all('/((?:^|[A-Z])[a-z]+)/', $class[2], $words);

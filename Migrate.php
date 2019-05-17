@@ -22,12 +22,21 @@ class Migrate
 		$migrations = $this->getMigrations();
 
 		foreach ($migrations as $module => $module_migrations) {
+			$vars = [];
+			if (file_exists(INCLUDE_PATH . 'model' . DIRECTORY_SEPARATOR . $module . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'vars.php'))
+				require(INCLUDE_PATH . 'model' . DIRECTORY_SEPARATOR . $module . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'vars.php');
+
 			$tmp_history = [];
+			$executed_history = [];
 			foreach ($module_migrations as $migration) {
 				if ($migration->version > ($status[$module] ?? 0)) {
 					try {
-						$migration->up();
-						$tmp_history[] = $migration;
+						if (!in_array($migration->migration_name, $vars['skip-migrations'] ?? [])) {
+							$migration->up();
+							$tmp_history[] = $migration;
+						}
+
+						$executed_history[] = $migration;
 					} catch (\Exception $e) {
 						try {
 							$this->reverse($tmp_history);
@@ -39,7 +48,7 @@ class Migrate
 				}
 			}
 
-			foreach ($tmp_history as $migration) {
+			foreach ($executed_history as $migration) {
 				$this->db->query('INSERT INTO `model_migrations`(`module`,`name`,`version`,`date`) VALUES(
 	' . $this->db->quote($module) . ',
 	' . $this->db->quote($migration->name) . ',

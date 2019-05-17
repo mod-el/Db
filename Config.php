@@ -223,24 +223,6 @@ $config = ' . var_export($config, true) . ';
 
 		$this->model->markModuleAsInitialized('Db');
 
-		$this->model->_Db->query('CREATE TABLE IF NOT EXISTS `main_settings` (
-		  `id` int(11) NOT NULL AUTO_INCREMENT,
-		  `k` varchar(255) COLLATE utf8_unicode_ci NOT NULL,
-		  `v` text COLLATE utf8_unicode_ci NULL,
-		  PRIMARY KEY (`id`)
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;');
-
-		$this->model->_Db->query('CREATE TABLE IF NOT EXISTS `model_version_locks` (
-		  `id` int(11) NOT NULL AUTO_INCREMENT,
-		  `table` varchar(250) COLLATE utf8_unicode_ci NOT NULL,
-		  `row` int(11) NOT NULL,
-		  `version` int(10) unsigned NOT NULL,
-		  `date` datetime NOT NULL,
-		  PRIMARY KEY (`id`),
-		  KEY `admin_version_locks_idx` (`table`,`row`),
-		  KEY `model_version_locks_date` (`date`)
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;');
-
 		return true;
 	}
 
@@ -290,18 +272,15 @@ $config = ' . var_export($config, true) . ';
 	/**
 	 * @return bool
 	 */
-	public function postUpdate_1_3_0()
+	public function postUpdate_1_6_1()
 	{
-		$this->model->_Db->query('CREATE TABLE IF NOT EXISTS `model_version_locks` (
-		  `id` int(11) NOT NULL AUTO_INCREMENT,
-		  `table` varchar(250) COLLATE utf8_unicode_ci NOT NULL,
-		  `row` int(11) NOT NULL,
-		  `version` int(10) unsigned NOT NULL,
-		  `date` datetime NOT NULL,
-		  PRIMARY KEY (`id`),
-		  KEY `admin_version_locks_idx` (`table`,`row`),
-		  KEY `model_version_locks_date` (`date`)
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;');
-		return true;
+		$file_path = INCLUDE_PATH . 'model' . DIRECTORY_SEPARATOR . 'Db' . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'vars.php';
+
+		$vars = [];
+		if (file_exists($file_path))
+			require($file_path);
+
+		$vars['skip-migrations'] = ['Migration_2019051701_CreateFirstTables'];
+		return (bool)file_put_contents($file_path, "<?php\n\$vars = " . var_export($vars, true) . ";\n");
 	}
 }
