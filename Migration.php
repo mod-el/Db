@@ -88,9 +88,19 @@ abstract class Migration
 				break;
 			case 'addColumn':
 				$qry = 'ALTER TABLE `' . $options['table'] . '` ADD COLUMN `' . $options['name'] . '` ' . $options['type'];
+				if ($options['unsigned'])
+					$qry .= ' unsigned';
 				$qry .= $options['null'] ? ' NULL' : ' NOT NULL';
 				if ($options['after'])
 					$qry .= ' AFTER `' . $options['after'] . '`';
+				$this->db->query($qry);
+				break;
+			case 'addIndex':
+				$qry = 'ALTER TABLE `' . $options['table'] . '` ADD INDEX `' . $options['name'] . '` ';
+				$fields = array_map(function ($field) {
+					return $this->db->quote($field);
+				}, $options['fields']);
+				$qry .= '(' . implode(',', $fields) . ')';
 				$this->db->query($qry);
 				break;
 			default:
@@ -156,7 +166,26 @@ abstract class Migration
 				'name' => $name,
 				'type' => 'VARCHAR(255)',
 				'null' => true,
+				'unsigned' => false,
 				'after' => null,
+			], $options),
+		];
+	}
+
+	/**
+	 * @param string $table
+	 * @param string $name
+	 * @param array $fields
+	 * @param array $options
+	 */
+	protected function addIndex(string $table, string $name, array $fields, array $options = [])
+	{
+		$this->queue[] = [
+			'action' => 'addIndex',
+			'options' => array_merge([
+				'table' => $table,
+				'name' => $name,
+				'fields' => $fields,
 			], $options),
 		];
 	}
