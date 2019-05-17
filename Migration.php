@@ -86,6 +86,10 @@ abstract class Migration
 				$qry = 'CREATE TABLE `' . $options['table'] . '` (`' . $options['primary'] . '` int(11) NOT NULL AUTO_INCREMENT, PRIMARY KEY (`' . $options['primary'] . '`)) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci';
 				$this->db->query($qry);
 				break;
+			case 'dropTable':
+				$qry = 'DROP TABLE `' . $options['table'] . '`';
+				$this->db->query($qry);
+				break;
 			case 'addColumn':
 				$qry = 'ALTER TABLE `' . $options['table'] . '` ADD COLUMN `' . $options['name'] . '` ' . $options['type'];
 				if ($options['unsigned'])
@@ -95,12 +99,20 @@ abstract class Migration
 					$qry .= ' AFTER `' . $options['after'] . '`';
 				$this->db->query($qry);
 				break;
+			case 'dropColumn':
+				$qry = 'ALTER TABLE `' . $options['table'] . '` DROP COLUMN `' . $options['name'] . '`';
+				$this->db->query($qry);
+				break;
 			case 'addIndex':
 				$qry = 'ALTER TABLE `' . $options['table'] . '` ADD INDEX `' . $options['name'] . '` ';
 				$fields = array_map(function ($field) {
 					return $this->db->quote($field);
 				}, $options['fields']);
 				$qry .= '(' . implode(',', $fields) . ')';
+				$this->db->query($qry);
+				break;
+			case 'dropIndex':
+				$qry = 'ALTER TABLE `' . $options['table'] . '` DROP INDEX `' . $options['name'] . '`';
 				$this->db->query($qry);
 				break;
 			default:
@@ -116,6 +128,32 @@ abstract class Migration
 	protected function getReversedAction(array $action): array
 	{
 		switch ($action['action']) {
+			case 'createTable':
+				return [
+					'action' => 'dropTable',
+					'options' => [
+						'table' => $action['options']['table'],
+					],
+				];
+				break;
+			case 'addColumn':
+				return [
+					'action' => 'dropColumn',
+					'options' => [
+						'table' => $action['options']['table'],
+						'name' => $action['options']['name'],
+					],
+				];
+				break;
+			case 'addIndex':
+				return [
+					'action' => 'dropIndex',
+					'options' => [
+						'table' => $action['options']['table'],
+						'name' => $action['options']['name'],
+					],
+				];
+				break;
 			default:
 				throw new \Exception('Irreversible action');
 				break;
@@ -154,6 +192,19 @@ abstract class Migration
 
 	/**
 	 * @param string $table
+	 */
+	protected function dropTable(string $table)
+	{
+		$this->queue[] = [
+			'action' => 'dropTable',
+			'options' => [
+				'table' => $table,
+			],
+		];
+	}
+
+	/**
+	 * @param string $table
 	 * @param string $name
 	 * @param array $options
 	 */
@@ -174,6 +225,21 @@ abstract class Migration
 
 	/**
 	 * @param string $table
+	 * @param string $column
+	 */
+	protected function dropColumn(string $table, string $column)
+	{
+		$this->queue[] = [
+			'action' => 'dropColumn',
+			'options' => [
+				'table' => $table,
+				'name' => $column,
+			],
+		];
+	}
+
+	/**
+	 * @param string $table
 	 * @param string $name
 	 * @param array $fields
 	 * @param array $options
@@ -187,6 +253,21 @@ abstract class Migration
 				'name' => $name,
 				'fields' => $fields,
 			], $options),
+		];
+	}
+
+	/**
+	 * @param string $table
+	 * @param string $column
+	 */
+	protected function dropIndex(string $table, string $column)
+	{
+		$this->queue[] = [
+			'action' => 'dropIndex',
+			'options' => [
+				'table' => $table,
+				'name' => $column,
+			],
 		];
 	}
 }
