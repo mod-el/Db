@@ -1654,12 +1654,15 @@ class Db extends Module
 				'fields' => [],
 			];
 
-			$customTableModel = $this->getTable($customTable . '_texts');
-			foreach ($customTableModel->columns as $k => $column) {
-				if ($k === $customTableModel->primary or $k === 'parent' or $k === 'lang')
-					continue;
+			try {
+				$customTableModel = $this->getTable($customTable . '_texts');
+				foreach ($customTableModel->columns as $k => $column) {
+					if ($k === $customTableModel->primary or $k === 'parent' or $k === 'lang')
+						continue;
 
-				$this->model->_Multilang->tables[$customTable]['fields'][] = $k;
+					$this->model->_Multilang->tables[$customTable]['fields'][] = $k;
+				}
+			} catch (\Exception $e) {
 			}
 		}
 	}
