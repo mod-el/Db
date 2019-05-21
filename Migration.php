@@ -119,7 +119,7 @@ abstract class Migration
 			case 'addIndex':
 				$qry = 'ALTER TABLE `' . $options['table'] . '` ADD INDEX `' . $options['name'] . '` ';
 				$fields = array_map(function ($field) {
-					return $this->db->quote($field);
+					return '`' . $field . '`';
 				}, $options['fields']);
 				$qry .= '(' . implode(',', $fields) . ')';
 				$this->db->query($qry);
