@@ -18,4 +18,9 @@ class Migration_2019051501_CreateMigrationsTable extends Migration
 			'null' => false,
 		]);
 	}
+
+	public function check(): bool
+	{
+		return $this->tableExists('model_migrations');
+	}
 }

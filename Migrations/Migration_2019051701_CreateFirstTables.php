@@ -25,4 +25,9 @@ class Migration_2019051701_CreateFirstTables extends Migration
 			'date',
 		]);
 	}
+
+	public function check(): bool
+	{
+		return $this->tableExists('main_settings');
+	}
 }

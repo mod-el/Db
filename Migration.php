@@ -38,6 +38,16 @@ abstract class Migration
 	abstract public function exec();
 
 	/**
+	 * Brute-checks if the migration was already executed
+	 *
+	 * @return bool
+	 */
+	public function check(): bool
+	{
+		return false;
+	}
+
+	/**
 	 *
 	 */
 	public function up()
@@ -118,6 +128,14 @@ abstract class Migration
 				$qry = 'ALTER TABLE `' . $options['table'] . '` DROP INDEX `' . $options['name'] . '`';
 				$this->db->query($qry);
 				break;
+			case 'addForeignKey':
+				$qry = 'ALTER TABLE `' . $options['table'] . '` ADD CONSTRAINT `' . $options['name'] . '` FOREIGN KEY (`' . $options['field'] . '`) REFERENCES `' . $options['ref-table'] . '` (`' . $options['ref-column'] . '`) ON DELETE ' . $options['on-delete'] . ' ON UPDATE ' . $options['on-update'];
+				$this->db->query($qry);
+				break;
+			case 'dropForeignKey':
+				$qry = 'ALTER TABLE `' . $options['table'] . '` DROP FOREIGN KEY `' . $options['name'] . '`';
+				$this->db->query($qry);
+				break;
 			default:
 				throw new \Exception('Unknown action');
 				break;
@@ -151,6 +169,15 @@ abstract class Migration
 			case 'addIndex':
 				return [
 					'action' => 'dropIndex',
+					'options' => [
+						'table' => $action['options']['table'],
+						'name' => $action['options']['name'],
+					],
+				];
+				break;
+			case 'addForeignKey':
+				return [
+					'action' => 'dropForeignKey',
 					'options' => [
 						'table' => $action['options']['table'],
 						'name' => $action['options']['name'],
@@ -272,5 +299,59 @@ abstract class Migration
 				'name' => $column,
 			],
 		];
+	}
+
+	/**
+	 * @param string $table
+	 * @param string $name
+	 * @param string $field
+	 * @param string $refTable
+	 * @param string $refColumn
+	 * @param array $options
+	 */
+	protected function addForeignKey(string $table, string $name, string $field, string $refTable, string $refColumn = 'id', array $options = [])
+	{
+		$options = array_merge([
+			'on-update' => 'CASCADE',
+			'on-delete' => 'RESTRICT',
+		], $options);
+
+		$this->queue[] = [
+			'action' => 'addForeignKey',
+			'options' => array_merge([
+				'table' => $table,
+				'name' => $name,
+				'field' => $field,
+				'ref-table' => $refTable,
+				'ref-column' => $refColumn,
+			], $options),
+		];
+	}
+
+	/**
+	 * @param string $table
+	 * @param string $name
+	 */
+	protected function dropForeignKey(string $table, string $name)
+	{
+		$this->queue[] = [
+			'action' => 'dropForeignKey',
+			'options' => [
+				'table' => $table,
+				'name' => $name,
+			],
+		];
+	}
+
+	/* Utility methods */
+
+	protected function tableExists(string $table): bool
+	{
+		$tables = $this->db->query('SHOW TABLES')->fetchAll();
+		$tables = array_map(function ($table) {
+			return $table['Tables_in_' . $this->db->name];
+		}, $tables);
+
+		return in_array($table, $tables);
 	}
 }

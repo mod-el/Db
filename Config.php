@@ -268,19 +268,4 @@ $config = ' . var_export($config, true) . ';
 			'date' => ['<=', $threshold->format('Y-m-d H:i:s')],
 		]);
 	}
-
-	/**
-	 * @return bool
-	 */
-	public function postUpdate_1_6_1()
-	{
-		$file_path = INCLUDE_PATH . 'model' . DIRECTORY_SEPARATOR . 'Db' . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'vars.php';
-
-		$vars = [];
-		if (file_exists($file_path))
-			require($file_path);
-
-		$vars['skip-migrations'] = ['Migration_2019051701_CreateFirstTables'];
-		return (bool)file_put_contents($file_path, "<?php\n\$vars = " . var_export($vars, true) . ";\n");
-	}
 }
