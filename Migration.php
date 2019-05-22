@@ -108,12 +108,25 @@ abstract class Migration
 				if ($options['unsigned'])
 					$qry .= ' unsigned';
 				$qry .= $options['null'] ? ' NULL' : ' NOT NULL';
+				if ($options['default'] !== null)
+					$qry .= ' DEFAULT ' . $this->db->quote($options['default']);
 				if ($options['after'])
 					$qry .= ' AFTER `' . $options['after'] . '`';
 				$this->db->query($qry);
 				break;
 			case 'dropColumn':
 				$qry = 'ALTER TABLE `' . $options['table'] . '` DROP COLUMN `' . $options['name'] . '`';
+				$this->db->query($qry);
+				break;
+			case 'changeColumn':
+				$qry = 'ALTER TABLE `' . $options['table'] . '` CHANGE COLUMN `' . $options['column'] . '` `' . $options['name'] . '` ' . $options['type'];
+				if ($options['unsigned'])
+					$qry .= ' unsigned';
+				$qry .= $options['null'] ? ' NULL' : ' NOT NULL';
+				if ($options['default'] !== null)
+					$qry .= ' DEFAULT ' . $this->db->quote($options['default']);
+				if ($options['after'])
+					$qry .= ' AFTER `' . $options['after'] . '`';
 				$this->db->query($qry);
 				break;
 			case 'addIndex':
@@ -249,6 +262,7 @@ abstract class Migration
 				'null' => true,
 				'unsigned' => false,
 				'after' => null,
+				'default' => null,
 			], $options),
 		];
 	}
@@ -265,6 +279,28 @@ abstract class Migration
 				'table' => $table,
 				'name' => $column,
 			],
+		];
+	}
+
+	/**
+	 * @param string $table
+	 * @param string $name
+	 * @param array $options
+	 */
+	protected function changeColumn(string $table, string $name, array $options = [])
+	{
+		$this->queue[] = [
+			'action' => 'changeColumn',
+			'options' => array_merge([
+				'table' => $table,
+				'column' =>  $name,
+				'name' => $name,
+				'type' => 'VARCHAR(255)',
+				'null' => true,
+				'unsigned' => false,
+				'after' => null,
+				'default' => null,
+			], $options),
 		];
 	}
 
