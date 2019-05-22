@@ -777,7 +777,7 @@ class Db extends Module
 			if (!in_array($table, $this->options['autoHide']) and array_key_exists($table, $this->options['linked-tables'])) {
 				$linked_table = $this->options['linked-tables'][$table]['with'];
 
-				$qry = 'DELETE `linked` FROM `' . $this->makeSafe($linked_table) . '` linked INNER JOIN `' . $this->makeSafe($table) . '` t' . $where_str;
+				$qry = 'DELETE FROM `' . $this->makeSafe($linked_table) . '` ' . $where_str;
 				$this->query($qry, $linked_table, 'DELETE', $options);
 			}
 
@@ -1654,15 +1654,12 @@ class Db extends Module
 				'fields' => [],
 			];
 
-			try {
-				$customTableModel = $this->getTable($customTable . '_texts');
-				foreach ($customTableModel->columns as $k => $column) {
-					if ($k === $customTableModel->primary or $k === 'parent' or $k === 'lang')
-						continue;
+			$customTableModel = $this->getTable($customTable . '_texts');
+			foreach ($customTableModel->columns as $k => $column) {
+				if ($k === $customTableModel->primary or $k === 'parent' or $k === 'lang')
+					continue;
 
-					$this->model->_Multilang->tables[$customTable]['fields'][] = $k;
-				}
-			} catch (\Exception $e) {
+				$this->model->_Multilang->tables[$customTable]['fields'][] = $k;
 			}
 		}
 	}
