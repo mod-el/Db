@@ -697,7 +697,7 @@ class Db extends Module
 			$this->commit();
 		} catch (\Exception $e) {
 			$this->rollBack();
-			$this->model->error('Error while updating.', '<b>Error:</b> ' . getErr($e) . '<br /><b>Query:</b> ' . $qry);
+			$this->model->error('Error while updating.', '<b>Error:</b> ' . getErr($e) . (isset($qry) ? '<br /><b>Query:</b> ' . $qry : ''));
 		}
 		return true;
 	}
