@@ -95,6 +95,9 @@ abstract class Migration
 	protected function performAction(string $action, array $options = [])
 	{
 		switch ($action) {
+			case 'query':
+				$this->db->query($options['query']);
+				break;
 			case 'createTable':
 				$qry = 'CREATE TABLE `' . $options['table'] . '` (`' . $options['primary'] . '` int(11) NOT NULL AUTO_INCREMENT, PRIMARY KEY (`' . $options['primary'] . '`)) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci';
 				$this->db->query($qry);
@@ -293,7 +296,7 @@ abstract class Migration
 			'action' => 'changeColumn',
 			'options' => array_merge([
 				'table' => $table,
-				'column' =>  $name,
+				'column' => $name,
 				'name' => $name,
 				'type' => 'VARCHAR(255)',
 				'null' => true,
