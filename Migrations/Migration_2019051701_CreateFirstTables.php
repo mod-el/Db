@@ -7,8 +7,8 @@ class Migration_2019051701_CreateFirstTables extends Migration
 	public function exec()
 	{
 		$this->createTable('main_settings');
-		$this->addColumn('model_migrations', 'k', ['null' => false]);
-		$this->addColumn('model_migrations', 'v', ['type' => 'text']);
+		$this->addColumn('main_settings', 'k', ['null' => false]);
+		$this->addColumn('main_settings', 'v', ['type' => 'text']);
 
 		$this->createTable('model_version_locks');
 		$this->addColumn('model_version_locks', 'table', ['null' => false]);
