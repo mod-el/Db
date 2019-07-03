@@ -718,7 +718,10 @@ class Db extends Module
 		if (!is_array($where) and is_numeric($where))
 			$where = [$tableModel->primary => $where];
 
-		$check = $this->select($table, $where);
+		$check = $this->select($table, $where, [
+			'auto_ml' => false,
+			'auto-join-linked-tables' => false,
+		]);
 		if ($check) {
 			$this->update($table, $where, $data, $options);
 			return $check[$tableModel->primary];
@@ -868,6 +871,7 @@ class Db extends Module
 			'stream' => true,
 			'quick-cache' => true,
 			'skip-user-filter' => false,
+			'auto-join-linked-tables' => true,
 		], $opt);
 		if ($options['multiple'] === false and !$options['limit'])
 			$options['limit'] = 1;
@@ -898,7 +902,7 @@ class Db extends Module
 			];
 		}
 
-		if (array_key_exists($table, $this->options['linked-tables'])) {
+		if ($options['auto-join-linked-tables'] and array_key_exists($table, $this->options['linked-tables'])) {
 			$customTable = $this->options['linked-tables'][$table]['with'];
 			$customTableModel = $this->getTable($this->options['linked-tables'][$table]['with']);
 
