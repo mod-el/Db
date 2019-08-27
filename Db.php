@@ -1170,7 +1170,7 @@ class Db extends Module
 		];
 
 		foreach (($options['joins'] ?? []) as $idx => $join) {
-			if (in_array($join['alias'], ['lang', 'custom', 'custom_lang']))
+			if (isset($join['alias']) and in_array($join['alias'], ['lang', 'custom', 'custom_lang']))
 				unset($options['joins'][$idx]);
 		}
 
