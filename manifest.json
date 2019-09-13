@@ -1,9 +1,9 @@
 {
 	"name": "Db",
 	"description": "Abstraction layer for DB management (via PDO)",
-	"version": "1.6.1",
+	"version": "1.6.2",
 	"dependencies": {
-		"Core": ">=2.8.3"
+		"Core": ">=2.8.6"
 	},
 	"file-types": {
 		"Migration": {
