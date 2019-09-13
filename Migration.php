@@ -1,9 +1,13 @@
 <?php namespace Model\Db;
 
+use Model\Core\Core;
+
 abstract class Migration
 {
 	/** @var Db */
 	private $db;
+	/** @var Core */
+	protected $model;
 	/** @var string */
 	public $migration_name;
 	/** @var string */
@@ -19,6 +23,7 @@ abstract class Migration
 	function __construct(Db $db)
 	{
 		$this->db = $db;
+		$this->model = $db->model;
 
 		$class = explode('\\', get_class($this));
 		$this->migration_name = end($class);
