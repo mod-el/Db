@@ -1641,6 +1641,38 @@ class Db extends Module
 		$this->checkLinkedTableMultilang($table);
 	}
 
+	public function getLinkedTables(string $table, array $options = []): array
+	{
+		$options = array_merge([
+			'linked' => true,
+			'multilang' => true,
+		], $options);
+
+		$ret = [
+			$table,
+		];
+
+		if ($options['linked']) {
+			foreach ($this->options['linked-tables'] as $linkedTable => $linkedTableOptions) {
+				if ($linkedTable === $table)
+					$ret[] = $linkedTableOptions['with'];
+				if ($linkedTableOptions['with'] === $table)
+					$ret[] = $linkedTable;
+			}
+		}
+
+		if ($options['multilang']) {
+			foreach ($this->model->_Multilang->tables as $mlTable => $mlOptions) {
+				if ($mlTable === $table)
+					$ret[] = $mlTable . $mlOptions['suffix'];
+				if ($mlTable . $mlOptions['suffix'] === $table)
+					$ret[] = $mlTable;
+			}
+		}
+
+		return array_unique($ret);
+	}
+
 	/**
 	 * @param string $table
 	 */
