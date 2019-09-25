@@ -1661,7 +1661,7 @@ class Db extends Module
 			}
 		}
 
-		if ($options['multilang']) {
+		if ($options['multilang'] and $this->model->isLoaded('Multilang')) {
 			foreach ($this->model->_Multilang->tables as $mlTable => $mlOptions) {
 				if ($mlTable === $table)
 					$ret[] = $mlTable . $mlOptions['suffix'];
