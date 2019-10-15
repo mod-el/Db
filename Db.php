@@ -1532,8 +1532,12 @@ class Db extends Module
 				$join['table'] = $k;
 			if (!isset($join['where']))
 				$join['where'] = [];
+			if (!isset($join['table']))
+				$this->model->error('Formato join errato');
 
 			$tableModel = $this->getTable($table);
+			$joinTableModel = $this->getTable($join['table']);
+
 			if (!isset($join['on'], $join['join_field']) and !isset($join['full_on'])) {
 				if ($tableModel === false)
 					$this->model->error('Errore durante la lettura dei dati.', 'Durante la lettura da <b>' . $table . '</b> e la join con la tabella <b>' . $join['table'] . '</b>, non sono stati fornite le colonne di aggancio (e non esiste modello per la tabella).');
@@ -1563,17 +1567,33 @@ class Db extends Module
 						}
 					}
 
-					if ($foreign_key === false)
-						$this->model->error('Errore join', 'Non trovo nessuna foreign key nella tabella "' . $table . '" che punti a "' . $join['table'] . '". Specificare i parametri a mano.');
+					if ($foreign_key !== false) {
+						$join['on'] = $foreign_key['column'];
+						$join['join_field'] = $foreign_key['ref_column'];
+					} else {
+						foreach ($joinTableModel->foreign_keys as $fk) {
+							if ($fk['ref_table'] == $table) {
+								if ($foreign_key === false) {
+									$foreign_key = $fk;
+								} else { // Ambiguo: due foreign key per la stessa tabella, non posso capire quale sia quella giusta
+									$this->model->error('Errore join', 'Ci sono due foreign key nella tabella "' . $join['table'] . '" che puntano a "' . $table . '", usare le clausole "on"/"join_field" per specificare quali colonne utilizzare.');
+								}
+							}
+						}
 
-					$join['on'] = $foreign_key['column'];
-					$join['join_field'] = $foreign_key['ref_column'];
+						if ($foreign_key) {
+							$join['on'] = $foreign_key['ref_column'];
+							$join['join_field'] = $foreign_key['column'];
+						}
+					}
+
+					if ($foreign_key === false)
+						$this->model->error('Errore join', 'Non trovo nessuna foreign key che leghi le tabelle "' . $table . '" e "' . $join['table'] . '". Specificare i parametri a mano.');
 				}
 			}
 
 			if (!isset($join['full_fields'])) {
 				if (!isset($join['fields'])) {
-					$joinTableModel = $this->getTable($join['table']);
 					if ($joinTableModel === false)
 						$this->model->error('Errore durante la lettura dei dati.', 'Durante la lettura da <b>' . $table . '</b> e la join con la tabella <b>' . $join['table'] . '</b>, non sono stati forniti i campi da prendere da quest\'ultima (e non esiste modello per la tabella).');
 
