@@ -1074,7 +1074,7 @@ class Db extends Module
 		if ($options['debug'] and DEBUG_MODE)
 			echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
 
-		if ($options['quick-cache']) {
+		if ($options['quick-cache'] and (!$options['multiple'] or !$options['stream'])) {
 			$cacheKey = md5($qry . ((string)$options['field']) . json_encode($options['max']) . json_encode($options['sum']) . ((int)$options['multiple']));
 			if (isset($this->queryCache[$table][$cacheKey])) {
 				if ($this->queryCache[$table][$cacheKey]['query'] == $qry)
@@ -1116,7 +1116,7 @@ class Db extends Module
 			}
 		}
 
-		if ($options['quick-cache']) {
+		if ($options['quick-cache'] and (!$options['multiple'] or !$options['stream'])) {
 			$this->queryCache[$table][$cacheKey] = [
 				'query' => $qry,
 				'res' => $return,
