@@ -106,10 +106,17 @@ class Migrate
 				if (!isset($migrations[$module]))
 					$migrations[$module] = [];
 
-				$className = 'Model\\' . $module . '\\Migrations\\' . pathinfo($f, PATHINFO_FILENAME);
-				$migrations[$module][] = new $className($this->db);
+				$baseClassName = pathinfo($f, PATHINFO_FILENAME);
+				$className = 'Model\\' . $module . '\\Migrations\\' . $baseClassName;
+				$migrations[$module][$baseClassName] = new $className($this->db);
 			}
 		}
+
+		foreach ($migrations as &$moduleMigrations) {
+			ksort($moduleMigrations);
+			$moduleMigrations = array_values($moduleMigrations);
+		}
+		unset($moduleMigrations);
 
 		uasort($migrations, function ($a, $b) {
 			if ($a === 'Db')
