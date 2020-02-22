@@ -1,5 +1,7 @@
 <?php namespace Model\Db;
 
+use Model\Core\Autoloader;
+
 class Migrate
 {
 	/** @var Db */
@@ -90,33 +92,17 @@ class Migrate
 	{
 		$migrations = [];
 
-		$dirs = glob(INCLUDE_PATH . 'model' . DIRECTORY_SEPARATOR . '*');
-		foreach ($dirs as $d) {
-			if (!is_dir($d . DIRECTORY_SEPARATOR . 'Migrations'))
+		$migration_files = Autoloader::getFilesByType('Migration');
+		foreach ($migration_files as $module => $moduleMigrations) {
+			if (empty($moduleMigrations))
 				continue;
 
-			$module = pathinfo($d, PATHINFO_FILENAME);
-
-			$migrations_files = glob($d . DIRECTORY_SEPARATOR . 'Migrations' . DIRECTORY_SEPARATOR . '*');
-			foreach ($migrations_files as $f) {
-				$ext = pathinfo($f, PATHINFO_EXTENSION);
-				if ($ext !== 'php')
-					continue;
-
-				if (!isset($migrations[$module]))
-					$migrations[$module] = [];
-
-				$baseClassName = pathinfo($f, PATHINFO_FILENAME);
-				$className = 'Model\\' . $module . '\\Migrations\\' . $baseClassName;
+			foreach ($moduleMigrations as $baseClassName => $className)
 				$migrations[$module][$baseClassName] = new $className($this->db);
-			}
-		}
 
-		foreach ($migrations as &$moduleMigrations) {
-			ksort($moduleMigrations);
-			$moduleMigrations = array_values($moduleMigrations);
+			ksort($migrations[$module]);
+			$migrations[$module] = array_values($migrations[$module]);
 		}
-		unset($moduleMigrations);
 
 		uasort($migrations, function ($a, $b) {
 			if ($a === 'Db')
