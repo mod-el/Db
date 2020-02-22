@@ -97,11 +97,16 @@ class Migrate
 			if (empty($moduleMigrations))
 				continue;
 
-			foreach ($moduleMigrations as $baseClassName => $className)
-				$migrations[$module][$baseClassName] = new $className($this->db);
+			foreach ($moduleMigrations as $baseClassName => $className) {
+				$migration = new $className($this->db);
+				if (!$migration->disabled)
+					$migrations[$module][$baseClassName] = new $className($this->db);
+			}
 
-			ksort($migrations[$module]);
-			$migrations[$module] = array_values($migrations[$module]);
+			if (isset($migrations[$module])) {
+				ksort($migrations[$module]);
+				$migrations[$module] = array_values($migrations[$module]);
+			}
 		}
 
 		uasort($migrations, function ($a, $b) {

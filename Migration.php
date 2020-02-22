@@ -16,6 +16,8 @@ abstract class Migration
 	public $version;
 	/** @var array */
 	protected $queue = [];
+	/** @var bool */
+	public $disabled = false;
 
 	/**
 	 * @param Db $db
