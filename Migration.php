@@ -116,7 +116,7 @@ abstract class Migration
 	{
 		switch ($action) {
 			case 'query':
-				$this->db->query($options['query']);
+				return $options['query'];
 				break;
 			case 'createTable':
 				return 'CREATE TABLE `' . $options['table'] . '` (`' . $options['primary'] . '` int(11) NOT NULL AUTO_INCREMENT, PRIMARY KEY (`' . $options['primary'] . '`)) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci';
