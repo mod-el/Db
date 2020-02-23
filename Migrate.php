@@ -27,7 +27,7 @@ class Migrate
 			$tmp_history = [];
 			$executed_history = [];
 			foreach ($module_migrations as $migration) {
-				if ($migration->version > ($status[$module] ?? 0)) {
+				if (!in_array($migration->version, $status[$module] ?? [])) {
 					try {
 						if (!$migration->check()) {
 							$migration->up();
@@ -79,8 +79,12 @@ class Migrate
 
 		$status = [];
 		$list = $this->db->query('SELECT * FROM model_migrations ORDER BY `module`, `version`');
-		foreach ($list as $migration)
-			$status[$migration['module']] = $migration['version'];
+		foreach ($list as $migration) {
+			if (!isset($status[$migration['module']]))
+				$status[$migration['module']] = [];
+
+			$status[$migration['module']][] = (int)$migration['version'];
+		}
 
 		return $status;
 	}
