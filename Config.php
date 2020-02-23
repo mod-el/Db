@@ -1,5 +1,6 @@
 <?php namespace Model\Db;
 
+use Model\Core\Autoloader;
 use Model\Core\Module_Config;
 
 class Config extends Module_Config
@@ -267,5 +268,17 @@ $config = ' . var_export($config, true) . ';
 		$this->model->_Db->delete('model_version_locks', [
 			'date' => ['<=', $threshold->format('Y-m-d H:i:s')],
 		]);
+	}
+
+	public function getFileInstance(string $type, string $file): ?object
+	{
+		switch ($type) {
+			case 'Migration':
+				$className = Autoloader::searchFile($type, $file);
+				return new $className($this->model->_Db);
+				break;
+		}
+
+		return null;
 	}
 }

@@ -62,7 +62,8 @@ abstract class Migration
 		$tmp_history = [];
 		foreach ($this->queue as $action) {
 			try {
-				$this->performAction($action['action'], $action['options']);
+				$qry = $this->getQuery($action['action'], $action['options']);
+				$this->db->query($qry);
 				$tmp_history[] = $action;
 			} catch (\Exception $e) {
 				try {
@@ -84,6 +85,17 @@ abstract class Migration
 	}
 
 	/**
+	 * @return array
+	 */
+	public function getSqlQueries(): array
+	{
+		$queries = [];
+		foreach ($this->queue as $action)
+			$queries[] = $this->getQuery($action['action'], $action['options']);
+		return $queries;
+	}
+
+	/**
 	 * @param array $list
 	 */
 	protected function reverse(array $list)
@@ -91,7 +103,8 @@ abstract class Migration
 		$list = array_reverse($list);
 		foreach ($list as $action) {
 			$action = $this->getReversedAction($action);
-			$this->performAction($action['action'], $action['options']);
+			$qry = $this->getQuery($action['action'], $action['options']);
+			$this->db->query($qry);
 		}
 	}
 
@@ -99,19 +112,17 @@ abstract class Migration
 	 * @param string $action
 	 * @param array $options
 	 */
-	protected function performAction(string $action, array $options = [])
+	protected function getQuery(string $action, array $options = []): string
 	{
 		switch ($action) {
 			case 'query':
 				$this->db->query($options['query']);
 				break;
 			case 'createTable':
-				$qry = 'CREATE TABLE `' . $options['table'] . '` (`' . $options['primary'] . '` int(11) NOT NULL AUTO_INCREMENT, PRIMARY KEY (`' . $options['primary'] . '`)) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci';
-				$this->db->query($qry);
+				return 'CREATE TABLE `' . $options['table'] . '` (`' . $options['primary'] . '` int(11) NOT NULL AUTO_INCREMENT, PRIMARY KEY (`' . $options['primary'] . '`)) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci';
 				break;
 			case 'dropTable':
-				$qry = 'DROP TABLE `' . $options['table'] . '`';
-				$this->db->query($qry);
+				return 'DROP TABLE `' . $options['table'] . '`';
 				break;
 			case 'addColumn':
 				$qry = 'ALTER TABLE `' . $options['table'] . '` ADD COLUMN `' . $options['name'] . '` ' . $options['type'];
@@ -122,11 +133,10 @@ abstract class Migration
 					$qry .= ' DEFAULT ' . $this->db->quote($options['default']);
 				if ($options['after'])
 					$qry .= ' AFTER `' . $options['after'] . '`';
-				$this->db->query($qry);
+				return $qry;
 				break;
 			case 'dropColumn':
-				$qry = 'ALTER TABLE `' . $options['table'] . '` DROP COLUMN `' . $options['name'] . '`';
-				$this->db->query($qry);
+				return 'ALTER TABLE `' . $options['table'] . '` DROP COLUMN `' . $options['name'] . '`';
 				break;
 			case 'changeColumn':
 				$qry = 'ALTER TABLE `' . $options['table'] . '` CHANGE COLUMN `' . $options['column'] . '` `' . $options['name'] . '` ' . $options['type'];
@@ -137,7 +147,7 @@ abstract class Migration
 					$qry .= ' DEFAULT ' . $this->db->quote($options['default']);
 				if ($options['after'])
 					$qry .= ' AFTER `' . $options['after'] . '`';
-				$this->db->query($qry);
+				return $qry;
 				break;
 			case 'addIndex':
 				$qry = 'ALTER TABLE `' . $options['table'] . '` ADD INDEX `' . $options['name'] . '` ';
@@ -145,19 +155,16 @@ abstract class Migration
 					return '`' . $field . '`';
 				}, $options['fields']);
 				$qry .= '(' . implode(',', $fields) . ')';
-				$this->db->query($qry);
+				return $qry;
 				break;
 			case 'dropIndex':
-				$qry = 'ALTER TABLE `' . $options['table'] . '` DROP INDEX `' . $options['name'] . '`';
-				$this->db->query($qry);
+				return 'ALTER TABLE `' . $options['table'] . '` DROP INDEX `' . $options['name'] . '`';
 				break;
 			case 'addForeignKey':
-				$qry = 'ALTER TABLE `' . $options['table'] . '` ADD CONSTRAINT `' . $options['name'] . '` FOREIGN KEY (`' . $options['field'] . '`) REFERENCES `' . $options['ref-table'] . '` (`' . $options['ref-column'] . '`) ON DELETE ' . $options['on-delete'] . ' ON UPDATE ' . $options['on-update'];
-				$this->db->query($qry);
+				return 'ALTER TABLE `' . $options['table'] . '` ADD CONSTRAINT `' . $options['name'] . '` FOREIGN KEY (`' . $options['field'] . '`) REFERENCES `' . $options['ref-table'] . '` (`' . $options['ref-column'] . '`) ON DELETE ' . $options['on-delete'] . ' ON UPDATE ' . $options['on-update'];
 				break;
 			case 'dropForeignKey':
-				$qry = 'ALTER TABLE `' . $options['table'] . '` DROP FOREIGN KEY `' . $options['name'] . '`';
-				$this->db->query($qry);
+				return 'ALTER TABLE `' . $options['table'] . '` DROP FOREIGN KEY `' . $options['name'] . '`';
 				break;
 			default:
 				throw new \Exception('Unknown action');
@@ -391,6 +398,10 @@ abstract class Migration
 
 	/* Utility methods */
 
+	/**
+	 * @param string $table
+	 * @return bool
+	 */
 	protected function tableExists(string $table): bool
 	{
 		$tables = $this->db->query('SHOW TABLES')->fetchAll();

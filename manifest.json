@@ -14,6 +14,12 @@
 					"prefix": "Migration_{datetime}_",
 					"notes": "Insert just the custom name of the class - prefix with date and time will be added automatically"
 				}
+			},
+			"actions": {
+				"get-queries": {
+					"fa-icon": "fas fa-stream",
+					"method": "getSqlQueries"
+				}
 			}
 		}
 	},
