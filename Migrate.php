@@ -20,48 +20,31 @@ class Migrate
 	 */
 	public function exec()
 	{
-		$status = $this->getMigrationsStatus();
 		$migrations = $this->getMigrations();
+		$status = $this->getMigrationsStatus();
 
-		foreach ($migrations as $module => $module_migrations) {
-			$tmp_history = [];
-			$executed_history = [];
-			foreach ($module_migrations as $migration) {
-				if (!in_array($migration->version, $status[$module] ?? [])) {
-					try {
-						if (!$migration->check()) {
-							$migration->up();
-							$tmp_history[] = $migration;
-						}
+		foreach ($migrations as $migration) {
+			if (!in_array($migration->module . '-' . $migration->version, $status)) {
+				try {
+					$this->db->beginTransaction();
 
-						$executed_history[] = $migration;
-					} catch (\Exception $e) {
-						try {
-							$this->reverse($tmp_history);
-						} catch (\Exception $r_e) {
-							throw new \Exception("Error while performing a migration, and it was not possible to reverse it either!\nError #1: " . getErr($e) . "\nError #2: " . getErr($r_e));
-						}
-						throw $e;
-					}
-				}
-			}
+					if (!$migration->check())
+						$migration->up();
 
-			foreach ($executed_history as $migration) {
-				$this->db->query('INSERT INTO `model_migrations`(`module`,`name`,`version`,`date`) VALUES(
-	' . $this->db->quote($module) . ',
+					$this->db->query('INSERT INTO `model_migrations`(`module`,`name`,`version`,`date`) VALUES(
+	' . $this->db->quote($migration->module) . ',
 	' . $this->db->quote($migration->name) . ',
 	' . $this->db->quote($migration->version) . ',
 	' . $this->db->quote(date('Y-m-d H:i:s')) . '
 )');
+
+					$this->db->commit();
+				} catch (\Exception $e) {
+					$this->db->rollBack();
+					throw $e;
+				}
 			}
 		}
-	}
-
-	private function reverse(array $history)
-	{
-		$history = array_reverse($history);
-		foreach ($history as $migration)
-			$migration->down();
 	}
 
 	/**
@@ -77,20 +60,16 @@ class Migrate
 		if (!in_array('model_migrations', $tables))
 			return [];
 
-		$status = [];
+		$migrations = [];
 		$list = $this->db->query('SELECT * FROM model_migrations ORDER BY `module`, `version`');
-		foreach ($list as $migration) {
-			if (!isset($status[$migration['module']]))
-				$status[$migration['module']] = [];
+		foreach ($list as $migration)
+			$migrations[] = $migration['module'] . '-' . (int)$migration['version'];
 
-			$status[$migration['module']][] = (int)$migration['version'];
-		}
-
-		return $status;
+		return $migrations;
 	}
 
 	/**
-	 * @return Migration[][]
+	 * @return Migration[]
 	 */
 	private function getMigrations(): array
 	{
@@ -107,10 +86,8 @@ class Migrate
 					$migrations[$module][$baseClassName] = new $className($this->db);
 			}
 
-			if (isset($migrations[$module])) {
+			if (isset($migrations[$module]))
 				ksort($migrations[$module]);
-				$migrations[$module] = array_values($migrations[$module]);
-			}
 		}
 
 		uasort($migrations, function ($a, $b) {
@@ -121,6 +98,19 @@ class Migrate
 			return 0;
 		});
 
-		return $migrations;
+		$migrationsDb = [];
+		foreach ($migrations['Db'] as $migration)
+			$migrationsDb[] = $migration;
+		unset($migrations['Db']);
+
+		$othersMigrations = [];
+		foreach ($migrations as $module => $moduleMigrations) {
+			foreach ($moduleMigrations as $migrationIdx => $migration)
+				$othersMigrations[$migrationIdx] = $migration;
+		}
+		ksort($othersMigrations);
+		$othersMigrations = array_values($othersMigrations);
+
+		return array_merge($migrationsDb, $othersMigrations);
 	}
 }

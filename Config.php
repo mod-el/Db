@@ -72,7 +72,7 @@ class Config extends Module_Config
 
 					$null = $c['Null'] == 'YES' ? true : false;
 
-					$col = array(
+					$col = [
 						'type' => $type,
 						'length' => $length,
 						'null' => $null,
@@ -80,7 +80,7 @@ class Config extends Module_Config
 						'default' => $c['Default'],
 						'extra' => $c['Extra'],
 						'foreign_key' => null
-					);
+					];
 					$columns[$c['Field']] = $col;
 				}
 
@@ -111,22 +111,22 @@ class Config extends Module_Config
 							if (preg_match('/ON DELETE (NOT NULL|DELETE|CASCADE|NO ACTION)/i', $r, $del_match))
 								$on_delete = $del_match[1];
 
-							$foreign_keys[$fk[1]] = array(
+							$foreign_keys[$fk[1]] = [
 								'column' => $fk[2],
 								'ref_table' => $fk[3],
 								'ref_column' => $fk[4],
 								'update' => $on_update,
 								'delete' => $on_delete,
-							);
+							];
 
 							if (!isset($references[$fk[3]]))
-								$references[$fk[3]] = array();
-							$references[$fk[3]][] = array(
+								$references[$fk[3]] = [];
+							$references[$fk[3]][] = [
 								'table' => $table,
 								'fk_column' => $fk[2],
 								'column' => $fk[4],
 								'fk' => $fk[1],
-							);
+							];
 						}
 					}
 				}

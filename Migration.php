@@ -9,6 +9,8 @@ abstract class Migration
 	/** @var Core */
 	protected $model;
 	/** @var string */
+	public $module;
+	/** @var string */
 	public $migration_name;
 	/** @var string */
 	public $name;
@@ -28,6 +30,7 @@ abstract class Migration
 		$this->model = $db->model;
 
 		$class = explode('\\', get_class($this));
+		$this->module = count($class) > 3 ? $class[count($class) - 3] : null;
 		$this->migration_name = end($class);
 
 		$class = explode('_', end($class));
