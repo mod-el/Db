@@ -8,8 +8,8 @@ class Db extends Module
 	public $name;
 	/** @var string */
 	public $unique_id;
-	/** @var \PDO */
-	protected $db;
+	/** @var \PDO|null */
+	protected $db = null;
 	/** @var Table[] */
 	protected $tables = [];
 
@@ -65,31 +65,69 @@ class Db extends Module
 
 		$this->options = array_merge($this->options, $options);
 
+		if ($this->options['direct-pdo']) {
+			$this->unique_id = 'custom';
+		}else{
+			$config = $this->retrieveConfig();
+			if (!$config or !isset($config['databases'][$this->options['db']]))
+				throw new \Exception('Missing database configuration for ' . $this->options['db'] . ' database!');
+
+			$configOptions = $config['databases'][$this->options['db']];
+
+			if (isset($configOptions['listCache']))
+				$this->options['listCache'] = array_unique(array_merge($configOptions['listCache'], $this->options['listCache']));
+			if (isset($configOptions['cache-tables']))
+				$this->options['cache-tables'] = array_unique(array_merge($configOptions['cache-tables'], $this->options['cache-tables']));
+			$this->options['cache-tables'] = array_unique(array_merge($this->options['listCache'], $this->options['cache-tables']));
+
+			if (isset($configOptions['autoHide']))
+				$this->options['autoHide'] = array_unique(array_merge($configOptions['autoHide'], $this->options['autoHide']));
+
+			if (isset($configOptions['linked-tables']))
+				$this->options['linked-tables'] = array_unique(array_merge($configOptions['linked-tables'], $this->options['linked-tables']));
+
+			$this->options = array_merge($configOptions, $this->options);
+
+			$this->name = $this->options['database'];
+			$this->unique_id = preg_replace('/[^A-Za-z0-9._-]/', '', $this->options['host'] . '-' . $this->options['database']);
+
+			$linkedTables = [];
+			foreach ($this->options['linked-tables'] as $k => $v) {
+				if (is_numeric($k)) {
+					$linkedTables[$v] = [
+						'with' => $v . '_custom',
+					];
+				} else {
+					if (!is_array($v))
+						$v = ['with' => $v];
+
+					$linkedTables[$k] = array_merge([
+						'with' => $k . '_custom',
+					], $v);
+				}
+			}
+			$this->options['linked-tables'] = $linkedTables;
+			foreach ($this->options['linked-tables'] as $table => $tableOptions)
+				$this->checkLinkedTableMultilang($table);
+
+			$this->tablesToCache = $this->options['cache-tables'];
+
+			if (!isset($this->options['user-filter']))
+				$this->options['user-filter'] = null;
+			if ($this->options['user-filter'] and (!is_array($this->options['user-filter']) or count($this->options['user-filter']) < 2 or !isset($this->options['user-filter']['idx'], $this->options['user-filter']['column'])))
+				$this->options['user-filter'] = null;
+		}
+	}
+
+	private function initDb()
+	{
+		if ($this->db !== null)
+			return;
+
 		try {
 			if ($this->options['direct-pdo']) {
 				$this->db = $this->options['direct-pdo'];
-				$this->unique_id = 'custom';
 			} else {
-				$config = $this->retrieveConfig();
-				if (!$config or !isset($config['databases'][$this->options['db']]))
-					throw new \Exception('Missing database configuration for ' . $options['db'] . ' database!');
-
-				$configOptions = $config['databases'][$this->options['db']];
-
-				if (isset($configOptions['listCache']))
-					$this->options['listCache'] = array_unique(array_merge($configOptions['listCache'], $this->options['listCache']));
-				if (isset($configOptions['cache-tables']))
-					$this->options['cache-tables'] = array_unique(array_merge($configOptions['cache-tables'], $this->options['cache-tables']));
-				$this->options['cache-tables'] = array_unique(array_merge($this->options['listCache'], $this->options['cache-tables']));
-
-				if (isset($configOptions['autoHide']))
-					$this->options['autoHide'] = array_unique(array_merge($configOptions['autoHide'], $this->options['autoHide']));
-
-				if (isset($configOptions['linked-tables']))
-					$this->options['linked-tables'] = array_unique(array_merge($configOptions['linked-tables'], $this->options['linked-tables']));
-
-				$this->options = array_merge($configOptions, $this->options);
-
 				$this->db = new \PDO('mysql:host=' . $this->options['host'] . ';dbname=' . $this->options['database'] . ';charset=utf8', $this->options['username'], $this->options['password'], [
 					\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
 					\PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
@@ -98,35 +136,7 @@ class Db extends Module
 					\PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => $this->options['use_buffered_query'],
 					\PDO::MYSQL_ATTR_LOCAL_INFILE => $this->options['local_infile'],
 				]);
-				$this->name = $this->options['database'];
-				$this->unique_id = preg_replace('/[^A-Za-z0-9._-]/', '', $this->options['host'] . '-' . $this->options['database']);
-
-				$linkedTables = [];
-				foreach ($this->options['linked-tables'] as $k => $v) {
-					if (is_numeric($k)) {
-						$linkedTables[$v] = [
-							'with' => $v . '_custom',
-						];
-					} else {
-						if (!is_array($v))
-							$v = ['with' => $v];
-
-						$linkedTables[$k] = array_merge([
-							'with' => $k . '_custom',
-						], $v);
-					}
-				}
-				$this->options['linked-tables'] = $linkedTables;
-				foreach ($this->options['linked-tables'] as $table => $tableOptions)
-					$this->checkLinkedTableMultilang($table);
 			}
-
-			$this->tablesToCache = $this->options['cache-tables'];
-
-			if (!isset($this->options['user-filter']))
-				$this->options['user-filter'] = null;
-			if ($this->options['user-filter'] and (!is_array($this->options['user-filter']) or count($this->options['user-filter']) < 2 or !isset($this->options['user-filter']['idx'], $this->options['user-filter']['column'])))
-				$this->options['user-filter'] = null;
 		} catch (\Exception $e) {
 			$this->model->error('Error while connecting to database: ' . $e->getMessage());
 		}
@@ -139,6 +149,8 @@ class Db extends Module
 	 */
 	function __call(string $name, array $arguments)
 	{
+		$this->initDb();
+
 		if (method_exists($this->db, $name)) {
 			return call_user_func_array([$this->db, $name], $arguments);
 		}
@@ -188,6 +200,8 @@ class Db extends Module
 
 		$rowId = null;
 
+		$this->initDb();
+
 		$this->n_query++;
 		$res = $this->db->query($qry);
 		$return = $res;
@@ -215,6 +229,8 @@ class Db extends Module
 	 */
 	public function prepare(string $qry, array $options = []): \PDOStatement
 	{
+		$this->initDb();
+
 		$this->n_prepared++;
 		return $this->db->prepare($qry, $options);
 	}
@@ -224,6 +240,8 @@ class Db extends Module
 	 */
 	public function beginTransaction(): bool
 	{
+		$this->initDb();
+
 		$res = $this->c_transactions == 0 ? $this->db->beginTransaction() : true;
 		if ($res)
 			$this->c_transactions++;
@@ -238,6 +256,8 @@ class Db extends Module
 		if ($this->c_transactions <= 0)
 			return false;
 
+		$this->initDb();
+
 		$this->c_transactions--;
 		if ($this->c_transactions == 0)
 			return $this->db->commit();
@@ -251,6 +271,8 @@ class Db extends Module
 	public function rollBack(): bool
 	{
 		if ($this->c_transactions > 0) {
+			$this->initDb();
+
 			$this->c_transactions = 0;
 			return $this->db->rollBack();
 		}
@@ -582,6 +604,8 @@ class Db extends Module
 				$this->checkDbData($multilangTable, $multilangData, $options);
 		}
 
+		$this->initDb();
+
 		try {
 			$this->beginTransaction();
 
@@ -832,6 +856,8 @@ class Db extends Module
 	 */
 	public function select(string $table, $where = [], $opt = [])
 	{
+		$this->initDb();
+
 		if (isset($this->deferedInserts[$table]))
 			$this->model->error('There are open bulk inserts on the table ' . $table . '; can\'t read');
 		if (!is_array($opt))
@@ -1221,6 +1247,8 @@ class Db extends Module
 		$where = $this->preliminaryWhereProcessing($tableModel, $where);
 		if ($where === null)
 			return false;
+
+		$this->initDb();
 
 		$multilang = $this->model->isLoaded('Multilang') ? $this->model->getModule('Multilang') : false;
 		$auto_ml = ($multilang and array_key_exists($table, $multilang->tables)) ? true : false;
@@ -2053,6 +2081,7 @@ class Db extends Module
 			else
 				$this->model->error('Only DateTime objects can be passed as Db values.');
 		}
+
 		if (is_array($v)) {
 			if (count($v) === 2 and is_numeric($v[0]) and is_numeric($v[1])) {
 				return 'POINT(' . $v[0] . ',' . $v[1] . ')';
@@ -2060,6 +2089,8 @@ class Db extends Module
 				$this->model->error('Unknown value type');
 			}
 		}
+
+		$this->initDb();
 
 		return $this->db->quote($v);
 	}
