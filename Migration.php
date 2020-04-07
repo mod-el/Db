@@ -14,7 +14,7 @@ abstract class Migration
 	public $migration_name;
 	/** @var string */
 	public $name;
-	/** @var int */
+	/** @var string */
 	public $version;
 	/** @var array */
 	protected $queue = [];
@@ -34,7 +34,7 @@ abstract class Migration
 		$this->migration_name = end($class);
 
 		$class = explode('_', end($class));
-		$this->version = (int)$class[1];
+		$this->version = $class[1];
 
 		preg_match_all('/((?:^|[A-Z])[a-z]+)/', $class[2], $words);
 		$this->name = implode(' ', $words[1]);
