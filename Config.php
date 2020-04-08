@@ -43,8 +43,10 @@ class Config extends Module_Config
 			if (!is_dir($path . 'data' . DIRECTORY_SEPARATOR . $db->unique_id))
 				mkdir($path . 'data' . DIRECTORY_SEPARATOR . $db->unique_id);
 
-			$migrate = new Migrate($db);
-			$migrate->exec();
+			if ($db_name === 'primary') {
+				$migrate = new Migrate($db);
+				$migrate->exec();
+			}
 
 			$references = []; // References of each table (via foreign keys) in other tables
 			$tables = $db->query('SHOW TABLES');
