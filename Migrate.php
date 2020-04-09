@@ -63,7 +63,7 @@ class Migrate
 		$migrations = [];
 		$list = $this->db->query('SELECT * FROM model_migrations ORDER BY `module`, `version`');
 		foreach ($list as $migration)
-			$migrations[] = $migration['module'] . '-' . $migration['version'];
+			$migrations[] = $migration['module'] . '-' . str_pad($migration['version'], 14, '0', STR_PAD_LEFT);
 
 		return $migrations;
 	}
