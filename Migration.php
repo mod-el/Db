@@ -34,7 +34,7 @@ abstract class Migration
 		$this->migration_name = end($class);
 
 		$class = explode('_', end($class));
-		$this->version = $class[1];
+		$this->version = str_pad($class[1], 14, '0', STR_PAD_LEFT);
 
 		preg_match_all('/((?:^|[A-Z])[a-z]+)/', $class[2], $words);
 		$this->name = implode(' ', $words[1]);
