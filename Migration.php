@@ -127,6 +127,9 @@ abstract class Migration
 			case 'dropTable':
 				return 'DROP TABLE `' . $options['table'] . '`';
 				break;
+			case 'renameTable':
+				return 'ALTER TABLE `' . $options['table'] . '` RENAME TO `' . $options['newName'] . '`';
+				break;
 			case 'addColumn':
 				$qry = 'ALTER TABLE `' . $options['table'] . '` ADD COLUMN `' . $options['name'] . '` ' . $options['type'];
 				if ($options['unsigned'])
@@ -187,6 +190,15 @@ abstract class Migration
 					'action' => 'dropTable',
 					'options' => [
 						'table' => $action['options']['table'],
+					],
+				];
+				break;
+			case 'renameTable':
+				return [
+					'action' => 'renameTable',
+					'options' => [
+						'table' => $action['options']['newName'],
+						'newName' => $action['options']['table'],
 					],
 				];
 				break;
@@ -262,6 +274,21 @@ abstract class Migration
 			'action' => 'dropTable',
 			'options' => [
 				'table' => $table,
+			],
+		];
+	}
+
+	/**
+	 * @param string $table
+	 * @param string $newName
+	 */
+	protected function renameTable(string $table, string $newName)
+	{
+		$this->queue[] = [
+			'action' => 'renameTable',
+			'options' => [
+				'table' => $table,
+				'newName' => $newName,
 			],
 		];
 	}
