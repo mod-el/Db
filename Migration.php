@@ -5,7 +5,7 @@ use Model\Core\Core;
 abstract class Migration
 {
 	/** @var Db */
-	private $db;
+	protected $db;
 	/** @var Core */
 	protected $model;
 	/** @var string */
