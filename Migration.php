@@ -156,7 +156,7 @@ abstract class Migration
 				return $qry;
 				break;
 			case 'addIndex':
-				$qry = 'ALTER TABLE `' . $options['table'] . '` ADD INDEX `' . $options['name'] . '` ';
+				$qry = 'ALTER TABLE `' . $options['table'] . '` ADD' . ($options['unique'] ? ' UNIQUE' : '') . ' INDEX `' . $options['name'] . '` ';
 				$fields = array_map(function ($field) {
 					return '`' . $field . '`';
 				}, $options['fields']);
@@ -365,6 +365,7 @@ abstract class Migration
 				'table' => $table,
 				'name' => $name,
 				'fields' => $fields,
+				'unique' => false,
 			], $options),
 		];
 	}
