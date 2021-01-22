@@ -99,6 +99,21 @@ abstract class Migration
 	}
 
 	/**
+	 * @return string
+	 */
+	public function rollbackFromControlPanel(): string
+	{
+		$lastMigration = $this->db->select('model_migrations', [], ['order_by' => 'id DESC']);
+		if ($lastMigration and $lastMigration['module'] === $this->module and $lastMigration['version'] === $this->version) {
+			$this->down();
+			$this->db->delete('model_migrations', $lastMigration['id']);
+			return 'Succesfully rollbacked migration';
+		} else {
+			return 'You can rollback only the last migration';
+		}
+	}
+
+	/**
 	 * @param array $list
 	 */
 	protected function reverse(array $list)

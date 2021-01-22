@@ -1,7 +1,7 @@
 {
 	"name": "Db",
 	"description": "Abstraction layer for DB management (via PDO)",
-	"version": "1.8.1",
+	"version": "1.8.2",
 	"dependencies": {
 		"Core": ">=2.10.0"
 	},
@@ -19,6 +19,10 @@
 				"get-queries": {
 					"fa-icon": "fas fa-stream",
 					"method": "getSqlQueries"
+				},
+				"rollback": {
+					"fa-icon": "fas fa-history",
+					"method": "rollbackFromControlPanel"
 				}
 			}
 		}
