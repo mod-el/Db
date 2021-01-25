@@ -67,7 +67,7 @@ class Db extends Module
 
 		if ($this->options['direct-pdo']) {
 			$this->unique_id = 'custom';
-		}else{
+		} else {
 			$config = $this->retrieveConfig();
 			if (!$config or !isset($config['databases'][$this->options['db']]))
 				throw new \Exception('Missing database configuration for ' . $this->options['db'] . ' database!');
@@ -1730,7 +1730,7 @@ class Db extends Module
 			return;
 
 		$customTable = $this->options['linked-tables'][$table]['with'];
-		if ($this->model->isLoaded('Multilang') and !array_key_exists($customTable, $this->model->_Multilang->tables)) {
+		if ($this->model->isLoaded('Multilang') and array_key_exists($table, $this->model->_Multilang->tables) and !array_key_exists($customTable, $this->model->_Multilang->tables)) {
 			$this->model->_Multilang->tables[$customTable] = [
 				'keyfield' => 'parent',
 				'lang' => 'lang',
