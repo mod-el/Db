@@ -1365,12 +1365,13 @@ class Db extends Module
 
 		if ($options['distinct'])
 			$qry = 'SELECT COUNT(DISTINCT ' . $this->elaborateField($options['distinct'], $make_options) . ') ';
+		elseif ($options['group_by'])
+			$qry = 'SELECT SQL_CALC_FOUND_ROWS * ';
 		else
 			$qry = 'SELECT COUNT(*) ';
 
 		$qry .= 'FROM `' . $this->makeSafe($table) . '` t' . $join_str . $where_str;
 		if ($options['group_by'] != false) $qry .= ' GROUP BY ' . ($options['group_by']);
-		if ($options['order_by'] != false) $qry .= ' ORDER BY ' . ($options['order_by']);
 		if ($options['limit'] != false) $qry .= ' LIMIT ' . ($options['limit']);
 
 		if ($options['return_query'])
@@ -1394,6 +1395,8 @@ class Db extends Module
 
 		try {
 			$q = $this->query($qry, $table, 'COUNT');
+			if ($options['group_by'])
+				$q = $this->query('SELECT FOUND_ROWS()', $table, 'COUNT');
 		} catch (\Exception $e) {
 			$this->model->error('Errore durante la lettura dei dati.', '<b>Errore:</b> ' . $e->getMessage() . '<br /><b>Query:</b> ' . $qry);
 		}
