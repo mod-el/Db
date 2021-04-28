@@ -135,16 +135,12 @@ abstract class Migration
 		switch ($action) {
 			case 'query':
 				return $options['query'];
-				break;
 			case 'createTable':
 				return 'CREATE TABLE `' . $options['table'] . '` (`' . $options['primary'] . '` int(11) NOT NULL AUTO_INCREMENT, PRIMARY KEY (`' . $options['primary'] . '`)) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci';
-				break;
 			case 'dropTable':
 				return 'DROP TABLE `' . $options['table'] . '`';
-				break;
 			case 'renameTable':
 				return 'ALTER TABLE `' . $options['table'] . '` RENAME TO `' . $options['newName'] . '`';
-				break;
 			case 'addColumn':
 				$qry = 'ALTER TABLE `' . $options['table'] . '` ADD COLUMN `' . $options['name'] . '` ' . $options['type'];
 				if ($options['unsigned'])
@@ -155,10 +151,8 @@ abstract class Migration
 				if ($options['after'])
 					$qry .= ' AFTER `' . $options['after'] . '`';
 				return $qry;
-				break;
 			case 'dropColumn':
 				return 'ALTER TABLE `' . $options['table'] . '` DROP COLUMN `' . $options['name'] . '`';
-				break;
 			case 'changeColumn':
 				$qry = 'ALTER TABLE `' . $options['table'] . '` CHANGE COLUMN `' . $options['column'] . '` `' . $options['name'] . '` ' . $options['type'];
 				if ($options['unsigned'])
@@ -169,7 +163,6 @@ abstract class Migration
 				if ($options['after'])
 					$qry .= ' AFTER `' . $options['after'] . '`';
 				return $qry;
-				break;
 			case 'addIndex':
 				$qry = 'ALTER TABLE `' . $options['table'] . '` ADD' . ($options['unique'] ? ' UNIQUE' : '') . ' INDEX `' . $options['name'] . '` ';
 				$fields = array_map(function ($field) {
@@ -177,19 +170,18 @@ abstract class Migration
 				}, $options['fields']);
 				$qry .= '(' . implode(',', $fields) . ')';
 				return $qry;
-				break;
 			case 'dropIndex':
 				return 'ALTER TABLE `' . $options['table'] . '` DROP INDEX `' . $options['name'] . '`';
-				break;
 			case 'addForeignKey':
 				return 'ALTER TABLE `' . $options['table'] . '` ADD CONSTRAINT `' . $options['name'] . '` FOREIGN KEY (`' . $options['field'] . '`) REFERENCES `' . $options['ref-table'] . '` (`' . $options['ref-column'] . '`) ON DELETE ' . $options['on-delete'] . ' ON UPDATE ' . $options['on-update'];
-				break;
 			case 'dropForeignKey':
 				return 'ALTER TABLE `' . $options['table'] . '` DROP FOREIGN KEY `' . $options['name'] . '`';
-				break;
+			case 'insert':
+				return $this->db->makeQueryForInsert($options['table'], [$options['data']], $options['options']);
+			case 'delete':
+				return $this->db->delete($options['table'], $options['id'], ['return_query' => true]);
 			default:
 				throw new \Exception('Unknown action');
-				break;
 		}
 	}
 
@@ -207,7 +199,6 @@ abstract class Migration
 						'table' => $action['options']['table'],
 					],
 				];
-				break;
 			case 'renameTable':
 				return [
 					'action' => 'renameTable',
@@ -216,7 +207,6 @@ abstract class Migration
 						'newName' => $action['options']['table'],
 					],
 				];
-				break;
 			case 'addColumn':
 				return [
 					'action' => 'dropColumn',
@@ -225,7 +215,6 @@ abstract class Migration
 						'name' => $action['options']['name'],
 					],
 				];
-				break;
 			case 'addIndex':
 				return [
 					'action' => 'dropIndex',
@@ -234,7 +223,6 @@ abstract class Migration
 						'name' => $action['options']['name'],
 					],
 				];
-				break;
 			case 'addForeignKey':
 				return [
 					'action' => 'dropForeignKey',
@@ -243,10 +231,21 @@ abstract class Migration
 						'name' => $action['options']['name'],
 					],
 				];
+			case 'insert':
+				if (!empty($action['data'][$action['options']['primary'] ?? 'id'])) {
+					return [
+						'action' => 'delete',
+						'options' => [
+							'table' => $action['options']['table'],
+							'id' => $action['data'][$action['options']['primary'] ?? 'id'],
+						],
+					];
+				} else {
+					throw new \Exception('Irreversible insert');
+				}
 				break;
 			default:
 				throw new \Exception('Irreversible action');
-				break;
 		}
 	}
 
@@ -438,6 +437,42 @@ abstract class Migration
 			'options' => [
 				'table' => $table,
 				'name' => $name,
+			],
+		];
+	}
+
+	/**
+	 * @param string $table
+	 * @param array $data
+	 * @param array $options
+	 */
+	protected function insert(string $table, array $data, array $options = [])
+	{
+		$options = array_merge([
+			'primary' => 'id',
+		], $options);
+
+		$this->queue[] = [
+			'action' => 'insert',
+			'options' => [
+				'table' => $table,
+				'data' => $data,
+				'options' => $options,
+			],
+		];
+	}
+
+	/**
+	 * @param string $table
+	 * @param int $id
+	 */
+	protected function delete(string $table, int $id)
+	{
+		$this->queue[] = [
+			'action' => 'delete',
+			'options' => [
+				'table' => $table,
+				'id' => $id,
 			],
 		];
 	}

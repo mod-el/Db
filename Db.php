@@ -503,8 +503,12 @@ class Db extends Module
 	 * @param array $options
 	 * @return string|null
 	 */
-	private function makeQueryForInsert(string $table, array $rows, array $options): ?string
+	public function makeQueryForInsert(string $table, array $rows, array $options = []): ?string
 	{
+		$options = array_merge([
+			'replace' => false,
+		], $options);
+
 		$qry_init = $options['replace'] ? 'REPLACE' : 'INSERT';
 
 		$keys = [];
@@ -548,11 +552,10 @@ class Db extends Module
 
 		$qry = null;
 		if (count($qry_rows) > 0) {
-			if ($keys_set) {
+			if ($keys_set)
 				$qry = $qry_init . ' INTO `' . $this->makeSafe($table) . '`(' . implode(',', $keys) . ') VALUES' . implode(',', $qry_rows);
-			} else {
+			else
 				$qry = $qry_init . ' INTO `' . $this->makeSafe($table) . '` VALUES' . implode(',', $qry_rows);
-			}
 		}
 
 		return $qry;
@@ -758,15 +761,16 @@ class Db extends Module
 	 * @param string $table
 	 * @param mixed $where
 	 * @param array $options
-	 * @return bool
+	 * @return bool|string
 	 */
-	public function delete(string $table, $where = [], array $options = []): bool
+	public function delete(string $table, $where = [], array $options = [])
 	{
 		$options = array_merge([
 			'confirm' => false,
 			'debug' => $this->options['debug'],
 			'force' => false,
 			'skip-user-filter' => false,
+			'return_query' => false,
 		], $options);
 
 		if (isset($this->deferedInserts[$table]) and !$options['force'])
@@ -795,6 +799,9 @@ class Db extends Module
 
 		if ($options['debug'] and DEBUG_MODE)
 			echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
+
+		if ($options['return_query'])
+			return $qry;
 
 		try {
 			$this->beginTransaction();
