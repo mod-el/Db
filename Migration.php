@@ -164,7 +164,7 @@ abstract class Migration
 					$qry .= ' AFTER `' . $options['after'] . '`';
 				return $qry;
 			case 'addIndex':
-				$qry = 'ALTER TABLE `' . $options['table'] . '` ADD' . ($options['unique'] ? ' UNIQUE' : '') . ' INDEX `' . $options['name'] . '` ';
+				$qry = 'ALTER TABLE `' . $options['table'] . '` ADD' . ($options['unique'] ? ' UNIQUE' : '') . ($options['fulltext'] ? ' FULLTEXT' : '') . ' INDEX `' . $options['name'] . '` ';
 				$fields = array_map(function ($field) {
 					return '`' . $field . '`';
 				}, $options['fields']);
@@ -373,14 +373,19 @@ abstract class Migration
 	 */
 	protected function addIndex(string $table, string $name, array $fields, array $options = [])
 	{
+		$options = array_merge([
+			'table' => $table,
+			'name' => $name,
+			'fields' => $fields,
+			'unique' => false,
+			'fulltext' => false,
+		], $options);
+		if ($options['unique'] and $options['fulltext'])
+			throw new \Exception('Un indice non può essere contemporaneamente unique e fulltext');
+
 		$this->queue[] = [
 			'action' => 'addIndex',
-			'options' => array_merge([
-				'table' => $table,
-				'name' => $name,
-				'fields' => $fields,
-				'unique' => false,
-			], $options),
+			'options' => $options,
 		];
 	}
 
