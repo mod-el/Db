@@ -24,7 +24,7 @@ abstract class Migration
 	/**
 	 * @param Db $db
 	 */
-	function __construct(Db $db)
+	public function __construct(Db $db)
 	{
 		$this->db = $db;
 		$this->model = $db->model;
@@ -144,10 +144,23 @@ abstract class Migration
 			case 'addColumn':
 				$qry = 'ALTER TABLE `' . $options['table'] . '` ADD COLUMN `' . $options['name'] . '` ' . $options['type'];
 				if ($options['unsigned'])
-					$qry .= ' unsigned';
-				$qry .= $options['null'] ? ' NULL' : ' NOT NULL';
-				if ($options['default'] !== null)
-					$qry .= ' DEFAULT ' . $this->db->quote($options['default']);
+					$qry .= ' UNSIGNED';
+
+				if ($options['generated']) {
+					$options['generated'] = array_merge([
+						'as' => null,
+						'type' => null,
+					], $options['generated']);
+					if (!$options['generated']['as'] or !$options['generated']['type'] or !in_array(mb_strtoupper($options['generated']['type']), ['STORED', 'VIRTUAL']))
+						throw new \Exception('Invalid syntax for generated column in migration');
+
+					$qry .= ' GENERATED ALWAYS AS(' . $options['generated']['as'] . ') ' . mb_strtoupper($options['generated']['type']);
+				} else {
+					$qry .= $options['null'] ? ' NULL' : ' NOT NULL';
+					if ($options['default'] !== null)
+						$qry .= ' DEFAULT ' . $this->db->quote($options['default']);
+				}
+
 				if ($options['after'])
 					$qry .= ' AFTER `' . $options['after'] . '`';
 				return $qry;
@@ -156,10 +169,23 @@ abstract class Migration
 			case 'changeColumn':
 				$qry = 'ALTER TABLE `' . $options['table'] . '` CHANGE COLUMN `' . $options['column'] . '` `' . $options['name'] . '` ' . $options['type'];
 				if ($options['unsigned'])
-					$qry .= ' unsigned';
-				$qry .= $options['null'] ? ' NULL' : ' NOT NULL';
-				if ($options['default'] !== null)
-					$qry .= ' DEFAULT ' . $this->db->quote($options['default']);
+					$qry .= ' UNSIGNED';
+
+				if ($options['generated']) {
+					$options['generated'] = array_merge([
+						'as' => null,
+						'type' => null,
+					], $options['generated']);
+					if (!$options['generated']['as'] or !$options['generated']['type'] or !in_array(mb_strtoupper($options['generated']['type']), ['STORED', 'VIRTUAL']))
+						throw new \Exception('Invalid syntax for generated column in migration');
+
+					$qry .= ' GENERATED ALWAYS AS(' . $options['generated']['as'] . ') ' . mb_strtoupper($options['generated']['type']);
+				} else {
+					$qry .= $options['null'] ? ' NULL' : ' NOT NULL';
+					if ($options['default'] !== null)
+						$qry .= ' DEFAULT ' . $this->db->quote($options['default']);
+				}
+
 				if ($options['after'])
 					$qry .= ' AFTER `' . $options['after'] . '`';
 				return $qry;
@@ -324,6 +350,7 @@ abstract class Migration
 				'unsigned' => false,
 				'after' => null,
 				'default' => null,
+				'generated' => null,
 			], $options),
 		];
 	}
@@ -361,6 +388,7 @@ abstract class Migration
 				'unsigned' => false,
 				'after' => null,
 				'default' => null,
+				'generated' => null,
 			], $options),
 		];
 	}
