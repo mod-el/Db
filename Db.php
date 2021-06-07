@@ -542,7 +542,7 @@ class Db extends Module
 					if ($v === null)
 						$values[] = 'NULL';
 					else
-						$values[] = $this->elaborateValue($v);
+						$values[] = $this->parseValue($v);
 				}
 				$keys_set = true;
 
@@ -553,9 +553,9 @@ class Db extends Module
 		$qry = null;
 		if (count($qry_rows) > 0) {
 			if ($keys_set)
-				$qry = $qry_init . ' INTO `' . $this->makeSafe($table) . '`(' . implode(',', $keys) . ') VALUES' . implode(',', $qry_rows);
+				$qry = $qry_init . ' INTO ' . $this->parseField($table) . '(' . implode(',', $keys) . ') VALUES' . implode(',', $qry_rows);
 			else
-				$qry = $qry_init . ' INTO `' . $this->makeSafe($table) . '` VALUES' . implode(',', $qry_rows);
+				$qry = $qry_init . ' INTO ' . $this->parseField($table) . ' VALUES' . implode(',', $qry_rows);
 		}
 
 		return $qry;
@@ -631,7 +631,7 @@ class Db extends Module
 				$this->model->error('Tried to update full table without explicit confirm');
 
 			if ($data['data']) {
-				$qry = 'UPDATE `' . $this->makeSafe($table) . '` AS `t` SET ' . $this->makeSqlString($table, $data['data'], ',', ['for_where' => false]) . ($where_str ? ' WHERE ' . $where_str : '');
+				$qry = 'UPDATE ' . $this->parseField($table) . ' AS `t` SET ' . $this->makeSqlString($table, $data['data'], ',', ['for_where' => false]) . ($where_str ? ' WHERE ' . $where_str : '');
 
 				if ($options['debug'] and DEBUG_MODE)
 					echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
@@ -643,10 +643,10 @@ class Db extends Module
 				if (!$multilangData)
 					continue;
 
-				$ml_where_str = ' WHERE `ml`.`' . $this->makeSafe($multilangOptions['lang']) . '` = ' . $this->db->quote($lang);
+				$ml_where_str = ' WHERE `ml`.' . $this->parseField($multilangOptions['lang']) . ' = ' . $this->db->quote($lang);
 				if ($where_str)
 					$ml_where_str .= ' AND (' . $where_str . ')';
-				$qry = 'UPDATE `' . $this->makeSafe($multilangTable) . '` AS `ml` INNER JOIN `' . $this->makeSafe($table) . '` AS `t` ON `t`.`' . $tableModel->primary . '` = `ml`.`' . $this->makeSafe($multilangOptions['keyfield']) . '` SET ' . $this->makeSqlString($table, $multilangData, ',', ['for_where' => false, 'main_alias' => 'ml']) . $ml_where_str;
+				$qry = 'UPDATE ' . $this->parseField($multilangTable) . ' AS `ml` INNER JOIN ' . $this->parseField($table) . ' AS `t` ON `t`.`' . $tableModel->primary . '` = `ml`.' . $this->parseField($multilangOptions['keyfield']) . ' SET ' . $this->makeSqlString($table, $multilangData, ',', ['for_where' => false, 'main_alias' => 'ml']) . $ml_where_str;
 
 				if ($options['debug'] and DEBUG_MODE)
 					echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
@@ -667,7 +667,7 @@ class Db extends Module
 				$linkedTableModel = $this->getTable($linked_table);
 
 				if ($data['custom-data']) {
-					$qry = 'UPDATE `' . $this->makeSafe($linked_table) . '` AS `c` INNER JOIN `' . $this->makeSafe($table) . '` AS `t` ON `t`.`' . $tableModel->primary . '` = `c`.`' . $linkedTableModel->primary . '` SET ' . $this->makeSqlString($linked_table, $data['custom-data'], ',', ['for_where' => false, 'main_alias' => 'c']) . ($where_str ? ' WHERE ' . $where_str : '');
+					$qry = 'UPDATE ' . $this->parseField($linked_table) . ' AS `c` INNER JOIN ' . $this->parseField($table) . ' AS `t` ON `t`.`' . $tableModel->primary . '` = `c`.`' . $linkedTableModel->primary . '` SET ' . $this->makeSqlString($linked_table, $data['custom-data'], ',', ['for_where' => false, 'main_alias' => 'c']) . ($where_str ? ' WHERE ' . $where_str : '');
 
 					if ($options['debug'] and DEBUG_MODE)
 						echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
@@ -685,10 +685,10 @@ class Db extends Module
 
 						$this->checkDbData($multilangTable, $multilangData, $options);
 
-						$ml_where_str = ' WHERE `ml`.`' . $this->makeSafe($multilangOptions['lang']) . '` = ' . $this->db->quote($lang);
+						$ml_where_str = ' WHERE `ml`.' . $this->parseField($multilangOptions['lang']) . ' = ' . $this->db->quote($lang);
 						if ($where_str)
 							$ml_where_str .= ' AND (' . $where_str . ')';
-						$qry = 'UPDATE `' . $this->makeSafe($multilangTable) . '` AS `ml` INNER JOIN `' . $this->makeSafe($table) . '` AS `t` ON `t`.`' . $tableModel->primary . '` = `ml`.`' . $this->makeSafe($multilangOptions['keyfield']) . '` SET ' . $this->makeSqlString($table, $multilangData, ',', ['for_where' => false, 'main_alias' => 'ml']) . $ml_where_str;
+						$qry = 'UPDATE ' . $this->parseField($multilangTable) . ' AS `ml` INNER JOIN ' . $this->parseField($table) . ' AS `t` ON `t`.`' . $tableModel->primary . '` = `ml`.' . $this->parseField($multilangOptions['keyfield']) . ' SET ' . $this->makeSqlString($table, $multilangData, ',', ['for_where' => false, 'main_alias' => 'ml']) . $ml_where_str;
 
 						if ($options['debug'] and DEBUG_MODE)
 							echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
@@ -794,8 +794,8 @@ class Db extends Module
 		if (empty($where_str) and !$options['confirm'])
 			$this->model->error('Tried to delete full table without explicit confirm');
 
-		if (in_array($table, $this->options['autoHide'])) $qry = 'UPDATE ' . $this->makeSafe($table) . ' SET zk_deleted = 1' . $where_str;
-		else $qry = 'DELETE FROM `' . $this->makeSafe($table) . '`' . $where_str;
+		if (in_array($table, $this->options['autoHide'])) $qry = 'UPDATE ' . $this->parseField($table) . ' SET zk_deleted = 1' . $where_str;
+		else $qry = 'DELETE FROM ' . $this->parseField($table) . $where_str;
 
 		if ($options['debug'] and DEBUG_MODE)
 			echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
@@ -811,7 +811,7 @@ class Db extends Module
 			if (!in_array($table, $this->options['autoHide']) and array_key_exists($table, $this->options['linked-tables'])) {
 				$linked_table = $this->options['linked-tables'][$table]['with'];
 
-				$qry = 'DELETE FROM `' . $this->makeSafe($linked_table) . '` ' . $where_str;
+				$qry = 'DELETE FROM ' . $this->parseField($linked_table) . ' ' . $where_str;
 				$this->query($qry, $linked_table, 'DELETE', $options);
 			}
 
@@ -930,7 +930,7 @@ class Db extends Module
 				'type' => 'LEFT',
 				'table' => $table . $ml['suffix'],
 				'alias' => 'lang',
-				'full_on' => 'lang.`' . $this->makeSafe($ml['keyfield']) . '` = t.`' . $tableModel->primary . '` AND lang.`' . $this->makeSafe($ml['lang']) . '` LIKE ' . $this->db->quote($options['lang']),
+				'full_on' => 'lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $tableModel->primary . '` AND lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->db->quote($options['lang']),
 				'fields' => $ml['fields'],
 			];
 		}
@@ -961,7 +961,7 @@ class Db extends Module
 					'type' => 'LEFT',
 					'table' => $customTable . $ml['suffix'],
 					'alias' => 'custom_lang',
-					'full_on' => 'custom_lang.`' . $this->makeSafe($ml['keyfield']) . '` = t.`' . $customTableModel->primary . '` AND custom_lang.`' . $this->makeSafe($ml['lang']) . '` LIKE ' . $this->db->quote($options['lang']),
+					'full_on' => 'custom_lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $customTableModel->primary . '` AND custom_lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->db->quote($options['lang']),
 					'fields' => $ml['fields'],
 				];
 			}
@@ -987,22 +987,22 @@ class Db extends Module
 						$f = ['field' => $nf, 'as' => $f];
 
 					if (is_array($f) and isset($f['field'], $f['as']))
-						$join['fields'][$nf] = $joinAlias . '.' . $this->makeSafe($f['field']) . ' AS ' . $this->makeSafe($f['as']);
+						$join['fields'][$nf] = $joinAlias . '.' . $this->parseField($f['field']) . ' AS ' . $this->parseField($f['as']);
 					else
-						$join['fields'][$nf] = $joinAlias . '.' . $this->makeSafe($f);
+						$join['fields'][$nf] = $joinAlias . '.' . $this->parseField($f);
 				}
 				if ($join['fields'])
 					$sel_str .= ',' . implode(',', $join['fields']);
 			}
 
 			if (isset($join['full_on'])) {
-				$join_str .= ' ' . $join['type'] . ' JOIN `' . $this->makeSafe($join['table']) . '` ' . $joinAlias . ' ON (' . $join['full_on'] . ')';
+				$join_str .= ' ' . $join['type'] . ' JOIN ' . $this->parseField($join['table']) . ' ' . $joinAlias . ' ON (' . $join['full_on'] . ')';
 			} else {
 				$join_where = array_merge([
-					$joinAlias . '.`' . $this->makeSafe($join['join_field']) . '` = t.`' . $this->makeSafe($join['on']) . '`',
+					$joinAlias . '.' . $this->parseField($join['join_field']) . ' = t.' . $this->parseField($join['on']),
 				], $join['where']);
 
-				$join_str .= ' ' . $join['type'] . ' JOIN `' . $this->makeSafe($join['table']) . '` ' . $joinAlias . ' ON (' . $this->makeSqlString($table, $join_where, 'AND', ['joins' => $joins]) . ')';
+				$join_str .= ' ' . $join['type'] . ' JOIN ' . $this->parseField($join['table']) . ' ' . $joinAlias . ' ON (' . $this->makeSqlString($table, $join_where, 'AND', ['joins' => $joins]) . ')';
 			}
 
 			$cj++;
@@ -1090,7 +1090,7 @@ class Db extends Module
 			}
 		}
 
-		$qry .= ' FROM `' . $this->makeSafe($table) . '` t' . $join_str . $where_str;
+		$qry .= ' FROM ' . $this->parseField($table) . ' t' . $join_str . $where_str;
 		if ($options['group_by']) {
 			$qry .= ' GROUP BY ' . ($options['group_by']);
 			if ($options['having'])
@@ -1298,7 +1298,7 @@ class Db extends Module
 				'type' => 'LEFT',
 				'table' => $table . $ml['suffix'],
 				'alias' => 'lang',
-				'full_on' => 'lang.`' . $this->makeSafe($ml['keyfield']) . '` = t.`' . $tableModel->primary . '` AND lang.`' . $this->makeSafe($ml['lang']) . '` LIKE ' . $this->db->quote($options['lang']),
+				'full_on' => 'lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $tableModel->primary . '` AND lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->db->quote($options['lang']),
 				'fields' => $ml['fields'],
 			];
 		}
@@ -1329,7 +1329,7 @@ class Db extends Module
 					'type' => 'LEFT',
 					'table' => $customTable . $ml['suffix'],
 					'alias' => 'custom_lang',
-					'full_on' => 'custom_lang.`' . $this->makeSafe($ml['keyfield']) . '` = t.`' . $customTableModel->primary . '` AND custom_lang.`' . $this->makeSafe($ml['lang']) . '` LIKE ' . $this->db->quote($options['lang']),
+					'full_on' => 'custom_lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $customTableModel->primary . '` AND custom_lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->db->quote($options['lang']),
 					'fields' => $ml['fields'],
 				];
 			}
@@ -1348,13 +1348,13 @@ class Db extends Module
 				$joinAlias = 'j' . $cj;
 
 			if (isset($join['full_on'])) {
-				$join_str .= ' ' . $join['type'] . ' JOIN `' . $this->makeSafe($join['table']) . '` ' . $joinAlias . ' ON (' . $join['full_on'] . ')';
+				$join_str .= ' ' . $join['type'] . ' JOIN ' . $this->parseField($join['table']) . ' ' . $joinAlias . ' ON (' . $join['full_on'] . ')';
 			} else {
 				$join_where = array_merge([
-					$joinAlias . '.`' . $this->makeSafe($join['join_field']) . '` = t.`' . $this->makeSafe($join['on']) . '`',
+					$joinAlias . '.' . $this->parseField($join['join_field']) . ' = t.' . $this->parseField($join['on']),
 				], $join['where']);
 
-				$join_str .= ' ' . $join['type'] . ' JOIN `' . $this->makeSafe($join['table']) . '` ' . $joinAlias . ' ON (' . $this->makeSqlString($table, $join_where, 'AND', ['joins' => $joins]) . ')';
+				$join_str .= ' ' . $join['type'] . ' JOIN ' . $this->parseField($join['table']) . ' ' . $joinAlias . ' ON (' . $this->makeSqlString($table, $join_where, 'AND', ['joins' => $joins]) . ')';
 			}
 			$cj++;
 		}
@@ -1377,7 +1377,7 @@ class Db extends Module
 		else
 			$qry = 'SELECT COUNT(*) ';
 
-		$qry .= 'FROM `' . $this->makeSafe($table) . '` t' . $join_str . $where_str;
+		$qry .= 'FROM ' . $this->parseField($table) . ' t' . $join_str . $where_str;
 		if ($options['group_by'] != false) $qry .= ' GROUP BY ' . ($options['group_by']);
 		if ($options['limit'] != false) $qry .= ' LIMIT ' . ($options['limit']);
 
@@ -2012,10 +2012,11 @@ class Db extends Module
 	/**
 	 * @param string $t
 	 * @return string
+	 * @deprecated Use parseField instead
 	 */
 	public function makeSafe(string $t): string
 	{
-		return preg_replace('/[^a-zA-Z0-9_.,()!=<> -]+/', '', $t);
+		return $this->parseField($t);
 	}
 
 	/**
@@ -2031,7 +2032,7 @@ class Db extends Module
 			'joins' => [],
 			'add-alias' => true,
 		], $opt);
-		$kr = '`' . $this->makeSafe($k) . '`';
+		$kr = $this->parseField($k);
 
 		$changed = false;
 		$cj = 0;
@@ -2080,10 +2081,19 @@ class Db extends Module
 	}
 
 	/**
+	 * @param string $t
+	 * @return string
+	 */
+	public function parseField(string $t): string
+	{
+		return '`' . preg_replace('/[^a-zA-Z0-9_.,()!=<> -]+/', '', $t) . '`';
+	}
+
+	/**
 	 * @param mixed $v
 	 * @return string
 	 */
-	private function elaborateValue($v): string
+	public function parseValue($v): string
 	{
 		if (is_object($v)) {
 			if (get_class($v) == 'DateTime')
@@ -2093,11 +2103,10 @@ class Db extends Module
 		}
 
 		if (is_array($v)) {
-			if (count($v) === 2 and is_numeric($v[0]) and is_numeric($v[1])) {
+			if (count($v) === 2 and is_numeric($v[0]) and is_numeric($v[1]))
 				return 'POINT(' . $v[0] . ',' . $v[1] . ')';
-			} else {
+			else
 				$this->model->error('Unknown value type');
-			}
 		}
 
 		$this->initDb();
@@ -2184,7 +2193,7 @@ class Db extends Module
 
 									$alreadyParsed = true;
 									$v[1] = '(' . implode(',', array_map(function ($el) {
-											return $this->elaborateValue($el);
+											return $this->parseValue($el);
 										}, $v[1])) . ')';
 								}
 							}
@@ -2233,13 +2242,13 @@ class Db extends Module
 						elseif ($operator == '!=') $operator = 'IS NOT';
 					}
 				} else {
-					$v1 = $this->elaborateValue($v1);
+					$v1 = $this->parseValue($v1);
 				}
 			}
 
 			if ($operator == 'BETWEEN') {
 				if ($v2 === null) $v2 = 'NULL';
-				else $v2 = $this->elaborateValue($v2);
+				else $v2 = $this->parseValue($v2);
 
 				$str[] = $k . ' BETWEEN ' . $v1 . ' AND ' . $v2;
 			} else
