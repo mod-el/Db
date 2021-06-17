@@ -2200,7 +2200,7 @@ class Db extends Module
 							$v1 = $v[1];
 							break;
 						case 3:
-							if ($v[0] == 'BETWEEN') {
+							if (strtoupper($v[0]) === 'BETWEEN') {
 								$operator = $v[0];
 								$v1 = $v[1];
 								$v2 = $v[2];
@@ -2211,7 +2211,7 @@ class Db extends Module
 							}
 							break;
 						case 4:
-							if ($v[1] != 'BETWEEN')
+							if (strtoupper($v[1]) !== 'BETWEEN')
 								continue 2;
 							$k = $v[0];
 							$operator = $v[1];
@@ -2230,29 +2230,51 @@ class Db extends Module
 				}
 			}
 
-			if ($options['prefix'])
-				$k = $options['prefix'] . $k;
-			$k = $this->elaborateField($k, $options);
+			$operator = strtoupper($operator);
+
+			if (is_array($k)) {
+				if ($operator !== 'MATCH')
+					throw new \Exception('You can use multiple fields only with MATCH operator');
+			} else {
+				$k = [$k];
+			}
+			foreach ($k as &$k_field) {
+				if ($options['prefix'])
+					$k_field = $options['prefix'] . $k_field;
+				$k_field = $this->elaborateField($k_field, $options);
+			}
+			unset($k_field);
+			$k = implode(',', $k);
 
 			if (!$alreadyParsed) {
 				if ($v1 === null) {
 					$v1 = 'NULL';
 					if ($options['for_where']) {
-						if ($operator == '=') $operator = 'IS';
-						elseif ($operator == '!=') $operator = 'IS NOT';
+						if ($operator === '=')
+							$operator = 'IS';
+						elseif ($operator === '!=')
+							$operator = 'IS NOT';
 					}
 				} else {
 					$v1 = $this->parseValue($v1);
 				}
 			}
 
-			if ($operator == 'BETWEEN') {
-				if ($v2 === null) $v2 = 'NULL';
-				else $v2 = $this->parseValue($v2);
-
-				$str[] = $k . ' BETWEEN ' . $v1 . ' AND ' . $v2;
-			} else
-				$str[] = $k . ' ' . $operator . ' ' . $v1;
+			switch ($operator) {
+				case 'BETWEEN':
+					if ($v2 === null)
+						$v2 = 'NULL';
+					else
+						$v2 = $this->parseValue($v2);
+					$str[] = $k . ' BETWEEN ' . $v1 . ' AND ' . $v2;
+					break;
+				case 'MATCH':
+					$str[] = 'MATCH(' . $k . ') AGAINST(' . $v1 . ')';
+					break;
+				default:
+					$str[] = $k . ' ' . $operator . ' ' . $v1;
+					break;
+			}
 		}
 
 		return implode(' ' . $glue . ' ', $str);
