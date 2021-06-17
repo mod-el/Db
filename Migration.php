@@ -192,7 +192,10 @@ abstract class Migration
 			case 'addIndex':
 				$qry = 'ALTER TABLE `' . $options['table'] . '` ADD' . ($options['unique'] ? ' UNIQUE' : '') . ($options['fulltext'] ? ' FULLTEXT' : '') . ' INDEX `' . $options['name'] . '` ';
 				$fields = array_map(function ($field) {
-					return '`' . $field . '`';
+					if (is_array($field))
+						return '`' . $field[0] . '` ' . $field[1];
+					else
+						return '`' . $field . '`';
 				}, $options['fields']);
 				$qry .= '(' . implode(',', $fields) . ')';
 				return $qry;
