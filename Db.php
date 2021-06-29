@@ -491,7 +491,7 @@ class Db extends Module
 			$this->commit();
 		} catch (\Exception $e) {
 			$this->rollBack();
-			$this->model->error('Error while bulk inserting.', '<b>Error:</b> ' . getErr($e), ['details' => '<b>Query:</b> ' . ($qry ?? 'Still undefined')]);
+			$this->model->error('Error while bulk inserting.', ['mex' => '<b>Error:</b> ' . getErr($e), 'details' => '<b>Query:</b> ' . ($qry ?? 'Still undefined')]);
 		}
 	}
 
