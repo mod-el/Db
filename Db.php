@@ -767,6 +767,7 @@ class Db extends Module
 	{
 		$options = array_merge([
 			'confirm' => false,
+			'joins' => [],
 			'debug' => $this->options['debug'],
 			'force' => false,
 			'skip-user-filter' => false,
@@ -789,13 +790,38 @@ class Db extends Module
 			'options' => $options,
 		]);
 
-		$where_str = $this->makeSqlString($table, $where, ' AND ');
+		$joins = $this->elaborateJoins($table, $options['joins']);
+
+		$join_str = '';
+		$cj = 0;
+		foreach ($joins as $join) {
+			if (!isset($join['type']))
+				$join['type'] = 'INNER';
+
+			if (isset($join['alias']))
+				$joinAlias = $join['alias'];
+			else
+				$joinAlias = 'j' . $cj;
+
+			if (isset($join['full_on'])) {
+				$join_str .= ' ' . $join['type'] . ' JOIN ' . $this->parseField($join['table']) . ' ' . $joinAlias . ' ON (' . $join['full_on'] . ')';
+			} else {
+				$join_where = array_merge([
+					$joinAlias . '.' . $this->parseField($join['join_field']) . ' = t.' . $this->parseField($join['on']),
+				], $join['where']);
+
+				$join_str .= ' ' . $join['type'] . ' JOIN ' . $this->parseField($join['table']) . ' ' . $joinAlias . ' ON (' . $this->makeSqlString($table, $join_where, 'AND', ['joins' => $joins]) . ')';
+			}
+			$cj++;
+		}
+
+		$where_str = $this->makeSqlString($table, $where, ' AND ', ['joins' => $joins]);
 		$where_str = empty($where_str) ? '' : ' WHERE ' . $where_str;
 		if (empty($where_str) and !$options['confirm'])
 			$this->model->error('Tried to delete full table without explicit confirm');
 
-		if (in_array($table, $this->options['autoHide'])) $qry = 'UPDATE ' . $this->parseField($table) . ' SET zk_deleted = 1' . $where_str;
-		else $qry = 'DELETE FROM ' . $this->parseField($table) . $where_str;
+		if (in_array($table, $this->options['autoHide'])) $qry = 'UPDATE ' . $this->parseField($table) . ' t' . $join_str . ' SET t.zk_deleted = 1' . $where_str;
+		else $qry = 'DELETE t FROM ' . $this->parseField($table) . ' t' . $join_str . $where_str;
 
 		if ($options['debug'] and DEBUG_MODE)
 			echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
