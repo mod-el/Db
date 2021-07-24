@@ -902,7 +902,6 @@ class Db extends Module
 			return false;
 
 		$multilang = $this->model->isLoaded('Multilang') ? $this->model->getModule('Multilang') : false;
-		$auto_ml = ($multilang and array_key_exists($table, $multilang->tables)) ? true : false;
 		$lang = $multilang ? $multilang->lang : 'it';
 
 		$options = array_merge([
@@ -913,7 +912,7 @@ class Db extends Module
 			'order_by' => false,
 			'group_by' => false,
 			'having' => [],
-			'auto_ml' => $auto_ml,
+			'auto_ml' => true,
 			'lang' => $lang,
 			'fallback' => true,
 			'joins' => [],
@@ -952,44 +951,76 @@ class Db extends Module
 		$join_str = '';
 		if ($isMultilang) {
 			$ml = $multilang->tables[$table];
-			$options['joins'][] = [
-				'type' => 'LEFT',
-				'table' => $table . $ml['suffix'],
-				'alias' => 'lang',
-				'full_on' => 'lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $tableModel->primary . '` AND lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->db->quote($options['lang']),
-				'fields' => $ml['fields'],
-			];
-		}
 
-		if ($options['auto-join-linked-tables'] and array_key_exists($table, $this->options['linked-tables'])) {
-			$customTable = $this->options['linked-tables'][$table]['with'];
-			$customTableModel = $this->getTable($this->options['linked-tables'][$table]['with']);
+			$mlTable = $table . $ml['suffix'];
+			$mlTableModel = $this->getTable($mlTable);
 
-			$customFields = [];
-			foreach ($customTableModel->columns as $column_name => $column) {
-				if ($column_name === $customTableModel->primary)
-					continue;
-				$customFields[] = $column_name;
+			$mlFields = [];
+			foreach ($ml['fields'] as $f) {
+				if (isset($mlTableModel->columns[$f]) and $mlTableModel->columns[$f]['real'])
+					$mlFields[] = $f;
 			}
 
 			$options['joins'][] = [
 				'type' => 'LEFT',
-				'table' => $customTable,
-				'alias' => 'custom',
-				'on' => $tableModel->primary,
-				'join_field' => $customTableModel->primary,
-				'fields' => $customFields,
+				'table' => $mlTable,
+				'alias' => 'lang',
+				'full_on' => 'lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $tableModel->primary . '` AND lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->db->quote($options['lang']),
+				'fields' => $mlFields,
 			];
+		}
 
-			if ($isMultilang) {
-				$ml = $multilang->tables[$customTable];
+		if ($options['auto-join-linked-tables']) {
+			$customTable = null;
+			// Join per tabelle custom normali
+			if (array_key_exists($table, $this->options['linked-tables'])) {
+				$customTable = $this->options['linked-tables'][$table]['with'];
+				$isCustomTableMain = true;
+			} else {
+				// Join per tabelle multilingua di tabelle linked (ad esempio se faccio una query verso prova_texts deve joinarmi anche prova_custom_texts)
+				foreach ($this->model->_Multilang->tables as $mlTable => $mlTableOptions) {
+					if ($mlTable . $mlTableOptions['suffix'] === $table and array_key_exists($mlTable, $this->options['linked-tables'])) {
+						$customTable = $this->options['linked-tables'][$mlTable]['with'] . $mlTableOptions['suffix'];
+						$isCustomTableMain = false;
+						break;
+					}
+				}
+			}
+
+			if ($customTable) {
+				$customTableModel = $this->getTable($customTable);
+
+				$customFields = [];
+				foreach ($customTableModel->columns as $column_name => $column) {
+					if ($column_name === $customTableModel->primary)
+						continue;
+					$customFields[] = $column_name;
+				}
+
 				$options['joins'][] = [
 					'type' => 'LEFT',
-					'table' => $customTable . $ml['suffix'],
-					'alias' => 'custom_lang',
-					'full_on' => 'custom_lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $customTableModel->primary . '` AND custom_lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->db->quote($options['lang']),
-					'fields' => $ml['fields'],
+					'table' => $customTable,
+					'alias' => 'custom',
+					'on' => $tableModel->primary,
+					'join_field' => $customTableModel->primary,
+					'fields' => $customFields,
 				];
+
+				if ($isMultilang and $isCustomTableMain) {
+					$mlFields = [];
+					foreach ($ml['fields'] as $f) {
+						if (isset($mlTableModel->columns[$f]) and !$mlTableModel->columns[$f]['real'])
+							$mlFields[] = $f;
+					}
+
+					$options['joins'][] = [
+						'type' => 'LEFT',
+						'table' => $customTable . $ml['suffix'],
+						'alias' => 'custom_lang',
+						'full_on' => 'custom_lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $customTableModel->primary . '` AND custom_lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->db->quote($options['lang']),
+						'fields' => $mlFields,
+					];
+				}
 			}
 		}
 
@@ -1468,6 +1499,7 @@ class Db extends Module
 			if (array_key_exists($table, $this->model->_Multilang->tables)) {
 				$multilangTable = $table . $this->model->_Multilang->tables[$table]['suffix'];
 				$multilangTableModel = $this->getTable($multilangTable);
+				$multilangColumns = [];
 				foreach ($this->model->_Multilang->tables[$table]['fields'] as $ml) {
 					$columns[$ml] = $multilangTableModel->columns[$ml];
 					$multilangColumns[] = $ml;
@@ -1491,12 +1523,13 @@ class Db extends Module
 						$languageVersions[$lang] = $r;
 					}
 
-					foreach ($languageVersions as $l => &$r) {
+					foreach ($languageVersions as &$r) {
 						foreach ($multilangColumns as $k) {
 							if (!array_key_exists($k, $r))
 								$r[$k] = null;
 						}
 					}
+					unset($r);
 				} else {
 					foreach ($languageVersions as $lang => $l_arr) {
 						foreach ($this->model->_Multilang->tables[$table]['fields'] as $f)
@@ -2363,8 +2396,13 @@ class Db extends Module
 				$customMultilang[$lang] = [];
 			}
 
+			$mlTableModel = $this->getTable($table . $this->model->_Multilang->tables[$table]['suffix']);
+
 			foreach ($data as $k => $v) {
-				if (in_array($k, $this->model->_Multilang->tables[$table]['fields'])) {
+				if (!isset($mlTableModel->columns[$k]))
+					continue;
+
+				if (in_array($k, $this->model->_Multilang->tables[$table]['fields']) and $mlTableModel->columns[$k]['real']) {
 					if (array_key_exists($k, $mainData)) // A field cannot exist both in the main table and in the multilang table
 						unset($mainData[$k]);
 
@@ -2381,24 +2419,20 @@ class Db extends Module
 					}
 				}
 
-				if (array_key_exists($table, $this->options['linked-tables'])) {
-					$linkedTable = $this->options['linked-tables'][$table]['with'];
+				if (array_key_exists($table, $this->options['linked-tables']) and !$mlTableModel->columns[$k]['real']) {
+					if (array_key_exists($k, $customData)) // A field cannot exist both in the main table and in the multilang table
+						unset($customData[$k]);
 
-					if (in_array($k, $this->model->_Multilang->tables[$linkedTable]['fields'])) {
-						if (array_key_exists($k, $customData)) // A field cannot exist both in the main table and in the multilang table
-							unset($customData[$k]);
+					if (!is_array($v)) {
+						$v = [
+							$this->model->_Multilang->lang => $v,
+						];
+					}
 
-						if (!is_array($v)) {
-							$v = [
-								$this->model->_Multilang->lang => $v,
-							];
-						}
-
-						foreach ($v as $lang => $subValue) {
-							if (!in_array($lang, $this->model->_Multilang->langs))
-								continue;
-							$customMultilang[$lang][$k] = $subValue;
-						}
+					foreach ($v as $lang => $subValue) {
+						if (!in_array($lang, $this->model->_Multilang->langs))
+							continue;
+						$customMultilang[$lang][$k] = $subValue;
 					}
 				}
 			}
@@ -2425,8 +2459,19 @@ class Db extends Module
 					$foreign_keys = [];
 				$this->tables[$table] = new Table($table, $table_columns, $foreign_keys);
 
+				$customTableModel = null;
 				if (array_key_exists($table, $this->options['linked-tables'])) {
 					$customTableModel = $this->getTable($this->options['linked-tables'][$table]['with']);
+				} elseif ($this->model->isLoaded('Multilang')) {
+					foreach ($this->model->_Multilang->tables as $mlTable => $mlTableOptions) {
+						if ($mlTable . $mlTableOptions['suffix'] === $table and array_key_exists($mlTable, $this->options['linked-tables'])) {
+							$customTableModel = $this->getTable($this->options['linked-tables'][$mlTable]['with'] . $mlTableOptions['suffix']);
+							break;
+						}
+					}
+				}
+
+				if ($customTableModel) {
 					foreach ($customTableModel->columns as $k => $column) {
 						if ($k === $customTableModel->primary or isset($this->tables[$table]->columns[$k]))
 							continue;
