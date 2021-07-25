@@ -691,7 +691,7 @@ class Db extends Module
 						$ml_where_str = ' WHERE `ml`.' . $this->parseField($multilangOptions['lang']) . ' = ' . $this->db->quote($lang);
 						if ($where_str)
 							$ml_where_str .= ' AND (' . $where_str . ')';
-						$qry = 'UPDATE ' . $this->parseField($customMultilangTable) . ' AS `custom_ml` INNER JOIN ' . $this->parseField($multilangTable) . ' AS `ml` ON `ml`.`' . $multilangTableModel->primary . '` = `custom_ml`.`' . $customMultilangModel->primary . '` INNER JOIN ' . $this->parseField($table) . ' AS `t` ON `t`.`' . $tableModel->primary . '` = `ml`.' . $this->parseField($multilangOptions['keyfield']) . ' SET ' . $this->makeSqlString($table, $multilangData, ',', ['for_where' => false, 'main_alias' => 'custom_ml']) . $ml_where_str;
+						$qry = 'UPDATE ' . $this->parseField($customMultilangTable) . ' AS `custom_ml` INNER JOIN ' . $this->parseField($multilangTable) . ' AS `ml` ON `ml`.`' . $multilangTableModel->primary . '` = `custom_ml`.`' . $customMultilangModel->primary . '` INNER JOIN ' . $this->parseField($table) . ' AS `t` ON `t`.`' . $tableModel->primary . '` = `ml`.' . $this->parseField($multilangOptions['keyfield']) . ' SET ' . $this->makeSqlString($customMultilangTable, $multilangData, ',', ['for_where' => false, 'main_alias' => 'custom_ml']) . $ml_where_str;
 
 						if ($options['debug'] and DEBUG_MODE)
 							echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
