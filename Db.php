@@ -966,7 +966,7 @@ class Db extends Module
 			if (array_key_exists($table, $this->options['linked-tables'])) {
 				$customTable = $this->options['linked-tables'][$table]['with'];
 				$isCustomTableMain = true;
-			} else {
+			} elseif ($this->model->isLoaded('Multilang')) {
 				// Join per tabelle multilingua di tabelle linked (ad esempio se faccio una query verso prova_texts deve joinarmi anche prova_custom_texts)
 				foreach ($this->model->_Multilang->tables as $mlTable => $mlTableOptions) {
 					if ($mlTable . $mlTableOptions['suffix'] === $table and array_key_exists($mlTable, $this->options['linked-tables'])) {
