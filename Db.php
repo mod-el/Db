@@ -378,6 +378,7 @@ class Db extends Module
 
 			$id = $this->query($qry, $table, 'INSERT', $options);
 
+			$mlRowsMap = [];
 			foreach ($data['multilang'] as $lang => $multilangData) {
 				$multilangData[$multilangOptions['keyfield']] = $id;
 				$multilangData[$multilangOptions['lang']] = $lang;
@@ -389,7 +390,7 @@ class Db extends Module
 				if ($options['debug'] and DEBUG_MODE)
 					echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
 
-				$this->query($qry, $multilangTable, 'INSERT', $options);
+				$mlRowsMap[$lang] = $this->query($qry, $multilangTable, 'INSERT', $options);
 			}
 
 			if (isset($this->cachedTables[$table])) {
@@ -413,14 +414,15 @@ class Db extends Module
 
 				if ($data['custom-multilang']) {
 					$multilangTable = $this->model->_Multilang->getTableFor($linked_table);
-					$multilangOptions = $this->model->_Multilang->getTableOptionsFor($linked_table);
-					foreach ($data['custom-multilang'] as $lang => $multilangData)
+					$multilangTableModel = $this->getTable($multilangTable);
+					foreach ($data['custom-multilang'] as $multilangData)
 						$this->checkDbData($multilangTable, $multilangData, $options);
 
 					foreach ($data['custom-multilang'] as $lang => $multilangData) {
-						$multilangData[$multilangOptions['keyfield']] = $id;
-						$multilangData[$multilangOptions['lang']] = $lang;
+						if (!isset($mlRowsMap[$lang]))
+							throw new \Exception('Errore nell\'inserimento custom multilang, rows map id non trovato');
 
+						$multilangData[$multilangTableModel->primary] = $mlRowsMap[$lang];
 						$qry = $this->makeQueryForInsert($multilangTable, [$multilangData], $options);
 						if (!$qry)
 							$this->model->error('Error while generating query for multilang insert');
@@ -676,32 +678,25 @@ class Db extends Module
 				}
 
 				if ($data['custom-multilang']) {
-					$multilangTable = $this->model->_Multilang->getTableFor($linked_table);
-					$multilangOptions = $this->model->_Multilang->getTableOptionsFor($linked_table);
+					$customMultilangTable = $this->model->_Multilang->getTableFor($linked_table);
+					$multilangTableModel = $this->getTable($multilangTable);
+					$customMultilangModel = $this->getTable($customMultilangTable);
 
 					foreach ($data['custom-multilang'] as $lang => $multilangData) {
 						if (!$multilangData)
 							continue;
 
-						$this->checkDbData($multilangTable, $multilangData, $options);
+						$this->checkDbData($customMultilangTable, $multilangData, $options);
 
 						$ml_where_str = ' WHERE `ml`.' . $this->parseField($multilangOptions['lang']) . ' = ' . $this->db->quote($lang);
 						if ($where_str)
 							$ml_where_str .= ' AND (' . $where_str . ')';
-						$qry = 'UPDATE ' . $this->parseField($multilangTable) . ' AS `ml` INNER JOIN ' . $this->parseField($table) . ' AS `t` ON `t`.`' . $tableModel->primary . '` = `ml`.' . $this->parseField($multilangOptions['keyfield']) . ' SET ' . $this->makeSqlString($table, $multilangData, ',', ['for_where' => false, 'main_alias' => 'ml']) . $ml_where_str;
+						$qry = 'UPDATE ' . $this->parseField($customMultilangTable) . ' AS `custom_ml` INNER JOIN ' . $this->parseField($multilangTable) . ' AS `ml` ON `ml`.`' . $multilangTableModel->primary . '` = `custom_ml`.`' . $customMultilangModel->primary . '` INNER JOIN ' . $this->parseField($table) . ' AS `t` ON `t`.`' . $tableModel->primary . '` = `ml`.' . $this->parseField($multilangOptions['keyfield']) . ' SET ' . $this->makeSqlString($table, $multilangData, ',', ['for_where' => false, 'main_alias' => 'ml']) . $ml_where_str;
 
 						if ($options['debug'] and DEBUG_MODE)
 							echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
 
-						$result = $this->query($qry, $table, 'UPDATE', $options);
-						if ($result->rowCount() === 0 and isset($where[$tableModel->primary])) { // If there is no multilang row in the db, and I have the row id, I create one
-							$multilangWhere = [
-								$multilangOptions['keyfield'] => $where[$tableModel->primary],
-								$multilangOptions['lang'] => $lang,
-							];
-							if ($this->count($multilangTable, $multilangWhere) === 0) // I actually check that the row does not exist (rowCount can return 0 if the updated data are identical to the existing ones)
-								$this->insert($multilangTable, array_merge($multilangData, $multilangWhere));
-						}
+						$this->query($qry, $table, 'UPDATE', $options);
 					}
 				}
 			}
@@ -820,8 +815,10 @@ class Db extends Module
 		if (empty($where_str) and !$options['confirm'])
 			$this->model->error('Tried to delete full table without explicit confirm');
 
-		if (in_array($table, $this->options['autoHide'])) $qry = 'UPDATE ' . $this->parseField($table) . ' t' . $join_str . ' SET t.zk_deleted = 1' . $where_str;
-		else $qry = 'DELETE t FROM ' . $this->parseField($table) . ' t' . $join_str . $where_str;
+		if (in_array($table, $this->options['autoHide']))
+			$qry = 'UPDATE ' . $this->parseField($table) . ' t' . $join_str . ' SET t.zk_deleted = 1' . $where_str;
+		else
+			$qry = 'DELETE t FROM ' . $this->parseField($table) . ' t' . $join_str . $where_str;
 
 		if ($options['debug'] and DEBUG_MODE)
 			echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
@@ -833,13 +830,6 @@ class Db extends Module
 			$this->beginTransaction();
 
 			$this->query($qry, $table, 'DELETE', $options);
-
-			if (!in_array($table, $this->options['autoHide']) and array_key_exists($table, $this->options['linked-tables'])) {
-				$linked_table = $this->options['linked-tables'][$table]['with'];
-
-				$qry = 'DELETE FROM ' . $this->parseField($linked_table) . ' ' . $where_str;
-				$this->query($qry, $linked_table, 'DELETE', $options);
-			}
 
 			if (isset($this->cachedTables[$table])) {
 				if ($this->canUseCache($table, $where, $options))
@@ -1013,11 +1003,12 @@ class Db extends Module
 							$mlFields[] = $f;
 					}
 
+					$mlCustomTableModel = $this->getTable($customTable . $ml['suffix']);
 					$options['joins'][] = [
 						'type' => 'LEFT',
 						'table' => $customTable . $ml['suffix'],
 						'alias' => 'custom_lang',
-						'full_on' => 'custom_lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $customTableModel->primary . '` AND custom_lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->db->quote($options['lang']),
+						'full_on' => 'custom_lang.' . $mlCustomTableModel->primary . ' = lang.`' . $mlTableModel->primary . '`',
 						'fields' => $mlFields,
 					];
 				}
@@ -1356,7 +1347,7 @@ class Db extends Module
 				'table' => $table . $ml['suffix'],
 				'alias' => 'lang',
 				'full_on' => 'lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $tableModel->primary . '` AND lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->db->quote($options['lang']),
-				'fields' => $ml['fields'],
+				'fields' => [],
 			];
 		}
 
@@ -1364,30 +1355,25 @@ class Db extends Module
 			$customTable = $this->options['linked-tables'][$table]['with'];
 			$customTableModel = $this->getTable($this->options['linked-tables'][$table]['with']);
 
-			$customFields = [];
-			foreach ($customTableModel->columns as $column_name => $column) {
-				if ($column_name === $customTableModel->primary)
-					continue;
-				$customFields[] = $column_name;
-			}
-
 			$options['joins'][] = [
 				'type' => 'LEFT',
 				'table' => $customTable,
 				'alias' => 'custom',
 				'on' => $tableModel->primary,
 				'join_field' => $customTableModel->primary,
-				'fields' => $customFields,
+				'fields' => [],
 			];
 
 			if ($isMultilang) {
-				$ml = $multilang->tables[$customTable];
+				$mlTableModel = $this->getTable($table . $ml['suffix']);
+				$mlCustomTableModel = $this->getTable($customTable . $ml['suffix']);
+
 				$options['joins'][] = [
 					'type' => 'LEFT',
 					'table' => $customTable . $ml['suffix'],
 					'alias' => 'custom_lang',
-					'full_on' => 'custom_lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $customTableModel->primary . '` AND custom_lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->db->quote($options['lang']),
-					'fields' => $ml['fields'],
+					'full_on' => 'custom_lang.' . $this->parseField($mlCustomTableModel->primary) . ' = lang.`' . $mlTableModel->primary . '`',
+					'fields' => [],
 				];
 			}
 		}
