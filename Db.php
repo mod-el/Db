@@ -413,7 +413,7 @@ class Db extends Module
 				$id = $this->query($qry, $linked_table, 'INSERT', $options);
 
 				if ($data['custom-multilang']) {
-					$multilangTable = $this->model->_Multilang->getTableFor($linked_table);
+					$multilangTable = $linked_table . $this->model->_Multilang->tables[$table]['suffix'];
 					$multilangTableModel = $this->getTable($multilangTable);
 					foreach ($data['custom-multilang'] as $multilangData)
 						$this->checkDbData($multilangTable, $multilangData, $options);
@@ -678,7 +678,7 @@ class Db extends Module
 				}
 
 				if ($data['custom-multilang']) {
-					$customMultilangTable = $this->model->_Multilang->getTableFor($linked_table);
+					$customMultilangTable = $linked_table . $this->model->_Multilang->tables[$table]['suffix'];
 					$multilangTableModel = $this->getTable($multilangTable);
 					$customMultilangModel = $this->getTable($customMultilangTable);
 
