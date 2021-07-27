@@ -259,7 +259,7 @@ class Db extends Module
 		$this->initDb();
 
 		$this->c_transactions--;
-		if ($this->c_transactions == 0)
+		if ($this->c_transactions == 0 and $this->db->inTransaction())
 			return $this->db->commit();
 		else
 			return true;
