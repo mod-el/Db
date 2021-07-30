@@ -274,7 +274,7 @@ class Db extends Module
 			$this->initDb();
 
 			$this->c_transactions = 0;
-			return $this->db->rollBack();
+			return $this->db->inTransaction() ? $this->db->rollBack() : false;
 		}
 		$this->c_transactions = 0;
 		return false;
