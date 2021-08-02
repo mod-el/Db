@@ -588,8 +588,6 @@ class Db extends Module
 
 		$tableModel = $this->getTable($table);
 		$where = $this->preliminaryWhereProcessing($tableModel, $where);
-		if ($where === null)
-			return false;
 
 		$this->addUserFilter($where, $tableModel, $options);
 
@@ -774,8 +772,6 @@ class Db extends Module
 
 		$tableModel = $this->getTable($table);
 		$where = $this->preliminaryWhereProcessing($tableModel, $where);
-		if ($where === null)
-			return false;
 
 		$this->addUserFilter($where, $tableModel, $options);
 
@@ -888,8 +884,6 @@ class Db extends Module
 
 		$tableModel = $this->getTable($table);
 		$where = $this->preliminaryWhereProcessing($tableModel, $where);
-		if ($where === null)
-			return false;
 
 		$multilang = $this->model->isLoaded('Multilang') ? $this->model->getModule('Multilang') : false;
 		$lang = $multilang ? $multilang->lang : 'it';
@@ -1300,8 +1294,6 @@ class Db extends Module
 	{
 		$tableModel = $this->getTable($table);
 		$where = $this->preliminaryWhereProcessing($tableModel, $where);
-		if ($where === null)
-			return false;
 
 		$this->initDb();
 
@@ -1342,18 +1334,35 @@ class Db extends Module
 		$isMultilang = ($multilang and $options['auto_ml'] and array_key_exists($table, $multilang->tables));
 		if ($isMultilang) {
 			$ml = $multilang->tables[$table];
+
+			$mlTable = $table . $ml['suffix'];
+			$mlTableModel = $this->getTable($mlTable);
+
+			$mlFields = [];
+			foreach ($ml['fields'] as $f) {
+				if (isset($mlTableModel->columns[$f]) and $mlTableModel->columns[$f]['real'])
+					$mlFields[] = $f;
+			}
+
 			$options['joins'][] = [
 				'type' => 'LEFT',
-				'table' => $table . $ml['suffix'],
+				'table' => $mlTable,
 				'alias' => 'lang',
 				'full_on' => 'lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $tableModel->primary . '` AND lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->db->quote($options['lang']),
-				'fields' => [],
+				'fields' => $mlFields,
 			];
 		}
 
 		if (array_key_exists($table, $this->options['linked-tables'])) {
 			$customTable = $this->options['linked-tables'][$table]['with'];
-			$customTableModel = $this->getTable($this->options['linked-tables'][$table]['with']);
+			$customTableModel = $this->getTable($customTable);
+
+			$customFields = [];
+			foreach ($customTableModel->columns as $column_name => $column) {
+				if ($column_name === $customTableModel->primary)
+					continue;
+				$customFields[] = $column_name;
+			}
 
 			$options['joins'][] = [
 				'type' => 'LEFT',
@@ -1361,19 +1370,25 @@ class Db extends Module
 				'alias' => 'custom',
 				'on' => $tableModel->primary,
 				'join_field' => $customTableModel->primary,
-				'fields' => [],
+				'fields' => $customFields,
 			];
 
 			if ($isMultilang) {
 				$mlTableModel = $this->getTable($table . $ml['suffix']);
 				$mlCustomTableModel = $this->getTable($customTable . $ml['suffix']);
 
+				$mlFields = [];
+				foreach ($ml['fields'] as $f) {
+					if (isset($mlTableModel->columns[$f]) and !$mlTableModel->columns[$f]['real'])
+						$mlFields[] = $f;
+				}
+
 				$options['joins'][] = [
 					'type' => 'LEFT',
 					'table' => $customTable . $ml['suffix'],
 					'alias' => 'custom_lang',
 					'full_on' => 'custom_lang.' . $this->parseField($mlCustomTableModel->primary) . ' = lang.`' . $mlTableModel->primary . '`',
-					'fields' => [],
+					'fields' => $mlFields,
 				];
 			}
 		}
@@ -2162,9 +2177,9 @@ class Db extends Module
 	/**
 	 * @param Table $tableModel
 	 * @param $where
-	 * @return array|null
+	 * @return array
 	 */
-	private function preliminaryWhereProcessing(Table $tableModel, $where): ?array
+	private function preliminaryWhereProcessing(Table $tableModel, $where): array
 	{
 		if (is_array($where)) {
 			return $where;
@@ -2174,7 +2189,7 @@ class Db extends Module
 			elseif (is_string($where))
 				$where = [$where];
 			else
-				return null;
+				throw new \Exception('Formato where errato');
 
 			return $where;
 		}
