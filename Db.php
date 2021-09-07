@@ -1461,7 +1461,7 @@ class Db extends Module
 		try {
 			$q = $this->query($qry, $table, 'COUNT');
 			if ($options['group_by'])
-				$q = $this->query('SELECT FOUND_ROWS()', $table, 'COUNT', ['query-limit' => false]);
+				$q = $this->query('SELECT FOUND_ROWS()', $table, 'COUNT', ['log' => false, 'query-limit' => false]);
 		} catch (\Exception $e) {
 			$this->model->error('Errore durante la lettura dei dati.', '<b>Errore:</b> ' . $e->getMessage() . '<br /><b>Query:</b> ' . $qry);
 		}
