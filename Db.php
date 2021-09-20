@@ -2260,7 +2260,7 @@ class Db extends Module
 							$v1 = $v[1];
 							break;
 						case 3:
-							if (strtoupper($v[0]) === 'BETWEEN') {
+							if (is_string($v[0]) and strtoupper($v[0]) === 'BETWEEN') {
 								$operator = $v[0];
 								$v1 = $v[1];
 								$v2 = $v[2];
