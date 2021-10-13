@@ -541,10 +541,7 @@ class Db extends Module
 					if (!$keys_set)
 						$keys[] = $this->elaborateField($k);
 
-					if ($v === null)
-						$values[] = 'NULL';
-					else
-						$values[] = $this->parseValue($v);
+					$values[] = $this->parseValue($v);
 				}
 				$keys_set = true;
 
@@ -2155,6 +2152,9 @@ class Db extends Module
 	 */
 	public function parseValue($v): string
 	{
+		if ($v === null)
+			return 'NULL';
+
 		if (is_object($v)) {
 			if (get_class($v) == 'DateTime')
 				$v = $v->format('Y-m-d H:i:s');
@@ -2237,7 +2237,8 @@ class Db extends Module
 					continue;
 				} else {
 					$n_elementi = count($v);
-					if ($n_elementi < 2 or $n_elementi > 4 or count(array_filter(array_keys($v), 'is_numeric')) < $n_elementi) continue;
+					if ($n_elementi < 2 or $n_elementi > 4 or count(array_filter(array_keys($v), 'is_numeric')) < $n_elementi)
+						continue;
 
 					switch ($n_elementi) {
 						case 2:
@@ -2246,17 +2247,8 @@ class Db extends Module
 								$operator = '=';
 							} else {
 								$operator = $v[0];
-
-								if (in_array(trim(strtoupper($operator)), ['IN', 'NOT IN'])) {
-									if (!is_array($v[1]))
-										$this->model->error('Expected array after a "' . trim($operator) . '" clause');
-
-									$alreadyParsed = true;
-									$v[1] = '(' . implode(',', array_map(function ($el) {
-											return $this->parseValue($el);
-										}, $v[1])) . ')';
-								}
 							}
+
 							$v1 = $v[1];
 							break;
 						case 3:
@@ -2273,11 +2265,25 @@ class Db extends Module
 						case 4:
 							if (strtoupper($v[1]) !== 'BETWEEN')
 								continue 2;
+
 							$k = $v[0];
 							$operator = $v[1];
 							$v1 = $v[2];
 							$v2 = $v[3];
 							break;
+					}
+
+					if (in_array(trim(strtoupper($operator)), ['IN', 'NOT IN'])) {
+						if (!is_array($v1))
+							$this->model->error('Expected array after a "' . trim($operator) . '" operator');
+
+						$alreadyParsed = true;
+						$v1 = '(' . implode(',', array_map(function ($el) {
+								return $this->parseValue($el);
+							}, $v1)) . ')';
+					} else {
+						if (is_array($v1))
+							$this->model->error('Arrays can only be used with IN or NOT IN operators');
 					}
 				}
 			} else {
@@ -2307,25 +2313,19 @@ class Db extends Module
 			$k = implode(',', $k);
 
 			if (!$alreadyParsed) {
-				if ($v1 === null) {
-					$v1 = 'NULL';
-					if ($options['for_where']) {
-						if ($operator === '=')
-							$operator = 'IS';
-						elseif ($operator === '!=')
-							$operator = 'IS NOT';
-					}
-				} else {
-					$v1 = $this->parseValue($v1);
+				if ($v1 === null and $options['for_where']) {
+					if ($operator === '=')
+						$operator = 'IS';
+					elseif ($operator === '!=')
+						$operator = 'IS NOT';
 				}
+
+				$v1 = $this->parseValue($v1);
 			}
 
 			switch ($operator) {
 				case 'BETWEEN':
-					if ($v2 === null)
-						$v2 = 'NULL';
-					else
-						$v2 = $this->parseValue($v2);
+					$v2 = $this->parseValue($v2);
 					$str[] = $k . ' BETWEEN ' . $v1 . ' AND ' . $v2;
 					break;
 				case 'MATCH':
