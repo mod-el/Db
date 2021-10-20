@@ -7,7 +7,7 @@ class Migration_20211020124300_DbName extends Migration
 	public function exec()
 	{
 		$this->addColumn('model_migrations', 'db', [
-			'after' => 'db',
+			'after' => 'id',
 			'null' => false,
 			'default' => 'primary',
 		]);
