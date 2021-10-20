@@ -91,8 +91,13 @@ class Migrate
 			foreach ($moduleMigrations as $baseClassName => $className) {
 				/** @var Migration $migration */
 				$migration = new $className($this->db);
-				if (!$migration->disabled and (!$migration->target or $migration->target === $this->db_name))
+				if (
+					!$migration->disabled
+					and (!$migration->target or $migration->target === $this->db_name)
+					and (!$migration->exclude or $migration->exclude !== $this->db_name)
+				) {
 					$migrations[$module][$baseClassName] = $migration;
+				}
 			}
 
 			if (isset($migrations[$module]))

@@ -4,24 +4,16 @@ use Model\Core\Core;
 
 abstract class Migration
 {
-	/** @var Db */
-	protected $db;
-	/** @var Core */
-	protected $model;
-	/** @var string */
-	public $module;
-	/** @var string */
-	public $migration_name;
-	/** @var string */
-	public $name;
-	/** @var string */
-	public $version;
-	/** @var array */
-	protected $queue = [];
-	/** @var bool */
-	public $disabled = false;
-	/** @var string|null */
+	protected Db $db;
+	protected Core $model;
+	public string $module;
+	public string $migration_name;
+	public string $name;
+	public string $version;
+	protected array $queue = [];
+	public bool $disabled = false;
 	public ?string $target = null;
+	public ?string $exclude = null;
 
 	/**
 	 * @param Db $db

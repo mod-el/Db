@@ -2,14 +2,10 @@
 
 class Table
 {
-	/** @var string */
-	public $name;
-	/** @var string */
-	public $primary;
-	/** @var array */
-	public $columns = [];
-	/** @var array */
-	public $foreign_keys = [];
+	public string $name;
+	public string $primary;
+	public array $columns = [];
+	public array $foreign_keys = [];
 
 	/**
 	 * Table constructor.
@@ -46,10 +42,8 @@ class Table
 		if (!array_key_exists($k, $this->columns))
 			return false;
 
-		if ($v === null) {
-			if ($this->columns[$k]['null']) return true;
-			else return false;
-		}
+		if ($v === null)
+			return (bool)$this->columns[$k]['null'];
 
 		switch ($this->columns[$k]['type']) {
 			case 'int':
@@ -64,7 +58,7 @@ class Table
 				if (!empty($v) and !is_numeric($v))
 					return false;
 				return true;
-				break;
+
 			case 'char':
 			case 'varchar':
 				if ($options['checkLengths']) {
@@ -72,7 +66,7 @@ class Table
 						return false;
 				}
 				return true;
-				break;
+
 			case 'date':
 			case 'datetime':
 				if (is_object($v) and get_class($v) == 'DateTime')
@@ -82,10 +76,9 @@ class Table
 				if (!$checkData)
 					return false;
 				return true;
-				break;
+
 			default:
 				return true;
-				break;
 		}
 	}
 }
