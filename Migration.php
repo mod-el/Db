@@ -14,6 +14,7 @@ abstract class Migration
 	public bool $disabled = false;
 	public ?string $target = null;
 	public ?string $exclude = null;
+	public ?bool $ignoreErrors = false;
 
 	/**
 	 * @param Db $db

@@ -7,6 +7,7 @@ class Migration_2019051501_CreateMigrationsTable extends Migration
 	public function exec()
 	{
 		$this->createTable('model_migrations');
+		$this->addColumn('model_migrations', 'db', ['null' => false, 'default' => 'primary']);
 		$this->addColumn('model_migrations', 'module', ['null' => false]);
 		$this->addColumn('model_migrations', 'name', ['null' => false]);
 		$this->addColumn('model_migrations', 'version', [

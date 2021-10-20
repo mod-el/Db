@@ -31,8 +31,14 @@ class Migrate
 				try {
 					$this->db->beginTransaction();
 
-					if (!$migration->check())
-						$migration->up();
+					if (!$migration->check()) {
+						try {
+							$migration->up();
+						} catch (\Exception $e) {
+							if (!$migration->ignoreErrors)
+								throw $e;
+						}
+					}
 
 					$this->db->query('INSERT INTO `model_migrations`(`db`,`module`,`name`,`version`,`date`) VALUES(
 	' . $this->db->parseValue($this->db_name) . ',
