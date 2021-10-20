@@ -43,8 +43,11 @@ class Config extends Module_Config
 			if (!is_dir($path . 'data' . DIRECTORY_SEPARATOR . $db->unique_id))
 				mkdir($path . 'data' . DIRECTORY_SEPARATOR . $db->unique_id);
 
-			if ($db_name === 'primary') {
-				$migrate = new Migrate($db);
+			if (!isset($db_options['migrate']))
+				$db_options['migrate'] = $db_name === 'primary';
+
+			if ($db_options['migrate']) {
+				$migrate = new Migrate($db_name, $db);
 				$migrate->exec();
 			}
 
@@ -72,7 +75,7 @@ class Config extends Module_Config
 						$length = false;
 					}
 
-					$null = $c['Null'] == 'YES' ? true : false;
+					$null = $c['Null'] == 'YES';
 
 					$col = [
 						'type' => $type,

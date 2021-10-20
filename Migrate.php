@@ -4,14 +4,17 @@ use Model\Core\Autoloader;
 
 class Migrate
 {
+	private string $db_name;
 	/** @var Db */
-	private $db;
+	private Db $db;
 
 	/**
+	 * @param string $name
 	 * @param Db $db
 	 */
-	function __construct(Db $db)
+	function __construct(string $name, Db $db)
 	{
+		$this->db_name = $name;
 		$this->db = $db;
 	}
 
@@ -31,11 +34,12 @@ class Migrate
 					if (!$migration->check())
 						$migration->up();
 
-					$this->db->query('INSERT INTO `model_migrations`(`module`,`name`,`version`,`date`) VALUES(
-	' . $this->db->quote($migration->module) . ',
-	' . $this->db->quote($migration->name) . ',
-	' . $this->db->quote($migration->version) . ',
-	' . $this->db->quote(date('Y-m-d H:i:s')) . '
+					$this->db->query('INSERT INTO `model_migrations`(`db`,`module`,`name`,`version`,`date`) VALUES(
+	' . $this->db->parseValue($this->db_name) . ',
+	' . $this->db->parseValue($migration->module) . ',
+	' . $this->db->parseValue($migration->name) . ',
+	' . $this->db->parseValue($migration->version) . ',
+	' . $this->db->parseValue(date('Y-m-d H:i:s')) . '
 )');
 
 					$this->db->commit();
@@ -61,7 +65,11 @@ class Migrate
 			return [];
 
 		$migrations = [];
-		$list = $this->db->query('SELECT * FROM model_migrations ORDER BY `module`, `version`');
+		try {
+			$list = $this->db->query('SELECT * FROM model_migrations WHERE `db` = \'' . $this->db_name . '\' ORDER BY `module`, `version`');
+		} catch (\Exception $e) { // Fallback in caso di non esistenza della colonna db - TODO: rimuovere in futuro
+			$list = $this->db->query('SELECT * FROM model_migrations ORDER BY `module`, `version`');
+		}
 		foreach ($list as $migration)
 			$migrations[] = $migration['module'] . '-' . str_pad($migration['version'], 14, '0', STR_PAD_LEFT);
 
@@ -81,9 +89,10 @@ class Migrate
 				continue;
 
 			foreach ($moduleMigrations as $baseClassName => $className) {
+				/** @var Migration $migration */
 				$migration = new $className($this->db);
-				if (!$migration->disabled)
-					$migrations[$module][$baseClassName] = new $className($this->db);
+				if (!$migration->disabled and (!$migration->target or $migration->target === $this->db_name))
+					$migrations[$module][$baseClassName] = $migration;
 			}
 
 			if (isset($migrations[$module]))
@@ -104,7 +113,7 @@ class Migrate
 		unset($migrations['Db']);
 
 		$othersMigrations = [];
-		foreach ($migrations as $module => $moduleMigrations) {
+		foreach ($migrations as $moduleMigrations) {
 			foreach ($moduleMigrations as $migrationIdx => $migration)
 				$othersMigrations[$migrationIdx] = $migration;
 		}

@@ -20,6 +20,8 @@ abstract class Migration
 	protected $queue = [];
 	/** @var bool */
 	public $disabled = false;
+	/** @var string|null */
+	public ?string $target = null;
 
 	/**
 	 * @param Db $db
@@ -158,7 +160,7 @@ abstract class Migration
 				} else {
 					$qry .= $options['null'] ? ' NULL' : ' NOT NULL';
 					if ($options['default'] !== null)
-						$qry .= ' DEFAULT ' . $this->db->quote($options['default']);
+						$qry .= ' DEFAULT ' . $this->db->parseValue($options['default']);
 				}
 
 				if ($options['after'])

@@ -4,33 +4,26 @@ use Model\Core\Module;
 
 class Db extends Module
 {
-	/** @var string */
-	public $name;
-	/** @var string */
-	public $unique_id;
 	/** @var \PDO|null */
-	protected $db = null;
+	protected ?\PDO $db = null;
 	/** @var Table[] */
-	protected $tables = [];
+	protected array $tables = [];
 
-	/** @var int */
-	public $n_query = 0;
-	/** @var int */
-	public $n_prepared = 0;
-	/** @var array */
-	public $n_tables = [];
+	public string $name;
+	public string $unique_id;
 
-	/** @var int */
-	protected $c_transactions = 0;
+	public int $n_query = 0;
+	public int $n_prepared = 0;
+	public array $n_tables = [];
 
-	/** @var array */
-	protected $querylimit_counter = [
+	protected int $c_transactions = 0;
+
+	protected array $querylimit_counter = [
 		'query' => [],
 		'table' => [],
 	];
 
-	/** @var array */
-	public $options = [
+	public array $options = [
 		'db' => 'primary',
 		'listCache' => [], // Deprecated
 		'cache-tables' => [],
@@ -45,15 +38,11 @@ class Db extends Module
 		'local_infile' => true,
 	];
 
-	/** @var array */
-	protected $tablesToCache = [];
-	/** @var array */
-	protected $cachedTables = [];
-	/** @var array */
-	protected $queryCache = [];
+	protected array $tablesToCache = [];
+	protected array $cachedTables = [];
+	protected array $queryCache = [];
 
-	/** @var array */
-	protected $deferedInserts = [];
+	protected array $deferedInserts = [];
 
 	/**
 	 * @param array $options
@@ -640,7 +629,7 @@ class Db extends Module
 				if (!$multilangData)
 					continue;
 
-				$ml_where_str = ' WHERE `ml`.' . $this->parseField($multilangOptions['lang']) . ' = ' . $this->db->quote($lang);
+				$ml_where_str = ' WHERE `ml`.' . $this->parseField($multilangOptions['lang']) . ' = ' . $this->parseValue($lang);
 				if ($where_str)
 					$ml_where_str .= ' AND (' . $where_str . ')';
 				$qry = 'UPDATE ' . $this->parseField($multilangTable) . ' AS `ml` INNER JOIN ' . $this->parseField($table) . ' AS `t` ON `t`.`' . $tableModel->primary . '` = `ml`.' . $this->parseField($multilangOptions['keyfield']) . ' SET ' . $this->makeSqlString($table, $multilangData, ',', ['for_where' => false, 'main_alias' => 'ml']) . $ml_where_str;
@@ -683,7 +672,7 @@ class Db extends Module
 
 						$this->checkDbData($customMultilangTable, $multilangData, $options);
 
-						$ml_where_str = ' WHERE `ml`.' . $this->parseField($multilangOptions['lang']) . ' = ' . $this->db->quote($lang);
+						$ml_where_str = ' WHERE `ml`.' . $this->parseField($multilangOptions['lang']) . ' = ' . $this->parseValue($lang);
 						if ($where_str)
 							$ml_where_str .= ' AND (' . $where_str . ')';
 						$qry = 'UPDATE ' . $this->parseField($customMultilangTable) . ' AS `custom_ml` INNER JOIN ' . $this->parseField($multilangTable) . ' AS `ml` ON `ml`.`' . $multilangTableModel->primary . '` = `custom_ml`.`' . $customMultilangModel->primary . '` INNER JOIN ' . $this->parseField($table) . ' AS `t` ON `t`.`' . $tableModel->primary . '` = `ml`.' . $this->parseField($multilangOptions['keyfield']) . ' SET ' . $this->makeSqlString($customMultilangTable, $multilangData, ',', ['for_where' => false, 'main_alias' => 'custom_ml']) . $ml_where_str;
@@ -946,7 +935,7 @@ class Db extends Module
 				'type' => 'LEFT',
 				'table' => $mlTable,
 				'alias' => 'lang',
-				'full_on' => 'lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $tableModel->primary . '` AND lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->db->quote($options['lang']),
+				'full_on' => 'lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $tableModel->primary . '` AND lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->parseValue($options['lang']),
 				'fields' => $mlFields,
 			];
 		}
@@ -1345,7 +1334,7 @@ class Db extends Module
 				'type' => 'LEFT',
 				'table' => $mlTable,
 				'alias' => 'lang',
-				'full_on' => 'lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $tableModel->primary . '` AND lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->db->quote($options['lang']),
+				'full_on' => 'lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $tableModel->primary . '` AND lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->parseValue($options['lang']),
 				'fields' => $mlFields,
 			];
 		}
