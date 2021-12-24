@@ -1160,14 +1160,29 @@ class Db extends Module
 			$return = [$options['field'] => $q->fetchColumn()];
 			$return = $this->normalizeTypesInSelect($table, $return);
 			$return = $return[$options['field']];
+
+			$this->trigger('selectResult', [
+				'type' => 'field',
+				'response' => $return,
+			]);
 		} elseif ($options['multiple']) {
 			$results = $this->streamResults($table, $options, $q, $isMultilang);
-			if ($options['stream'])
-				return $results;
+			if ($options['stream']) {
+				$this->trigger('selectResult', [
+					'type' => 'stream',
+				]);
 
-			$return = [];
-			foreach ($results as $k => $r)
-				$return[$k] = $r;
+				return $results;
+			} else {
+				$return = [];
+				foreach ($results as $k => $r)
+					$return[$k] = $r;
+
+				$this->trigger('selectResult', [
+					'type' => 'multiple',
+					'response' => count($return) . ' rows',
+				]);
+			}
 		} else {
 			$return = $q->fetch();
 			if ($return !== false) {
@@ -1175,6 +1190,11 @@ class Db extends Module
 					$return = $this->multilangFallback($table, $return, $options);
 				$return = $this->normalizeTypesInSelect($table, $return);
 			}
+
+			$this->trigger('selectResult', [
+				'type' => 'row',
+				'response' => $return,
+			]);
 		}
 
 		if ($options['quick-cache'] and (!$options['multiple'] or !$options['stream'])) {
