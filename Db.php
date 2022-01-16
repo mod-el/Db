@@ -4,7 +4,6 @@ use Model\Core\Module;
 
 class Db extends Module
 {
-	/** @var \PDO|null */
 	protected ?\PDO $db = null;
 	/** @var Table[] */
 	protected array $tables = [];
@@ -136,24 +135,34 @@ class Db extends Module
 	 * @param array $arguments
 	 * @return mixed
 	 */
-	function __call(string $name, array $arguments)
+	function __call(string $name, array $arguments): mixed
 	{
 		$this->initDb();
 
-		if (method_exists($this->db, $name)) {
+		if (method_exists($this->db, $name))
 			return call_user_func_array([$this->db, $name], $arguments);
-		}
+
 		return null;
 	}
 
 	/**
 	 * @param string $qry
-	 * @param string $table
-	 * @param string $type
+	 * @param int $type
+	 * @return string|false
+	 */
+	public function quote(string $qry, int $type = \PDO::PARAM_STR): string|false
+	{
+		return $this->db->quote($qry, $type);
+	}
+
+	/**
+	 * @param string $qry
+	 * @param string|null $table
+	 * @param string|null $type
 	 * @param array $options
 	 * @return \PDOStatement|int
 	 */
-	public function query(string $qry, string $table = null, string $type = null, array $options = [])
+	public function query(string $qry, string $table = null, string $type = null, array $options = []): \PDOStatement|int
 	{
 		$options = array_merge([
 			'log' => true,
@@ -278,9 +287,6 @@ class Db extends Module
 		return ($this->c_transactions - $ignore) > 0 ? true : false;
 	}
 
-	/**
-	 *
-	 */
 	public function terminate()
 	{
 		foreach ($this->deferedInserts as $table => $options) {
@@ -556,11 +562,8 @@ class Db extends Module
 	 * @param array $options
 	 * @return bool
 	 */
-	public function update(string $table, $where, array $data = null, array $options = []): bool
+	public function update(string $table, array|int|string $where, array $data, array $options = []): bool
 	{
-		if (!is_array($data))
-			$this->model->error('Error while updating.', '<b>Error:</b> No data array was given!');
-
 		$options = array_merge([
 			'version' => null,
 			'confirm' => false,
@@ -710,16 +713,13 @@ class Db extends Module
 
 	/**
 	 * @param string $table
-	 * @param array|int $where
+	 * @param array|int|string $where
 	 * @param array $data
 	 * @param array $options
 	 * @return null|int
 	 */
-	public function updateOrInsert(string $table, $where, array $data = null, array $options = []): ?int
+	public function updateOrInsert(string $table, array|int|string $where, array $data, array $options = []): ?int
 	{
-		if (!is_array($data))
-			$this->model->error('Error while updating.', '<b>Error:</b> No data array was given!');
-
 		$tableModel = $this->getTable($table);
 		if (!is_array($where) and is_numeric($where))
 			$where = [$tableModel->primary => $where];
@@ -738,11 +738,11 @@ class Db extends Module
 
 	/**
 	 * @param string $table
-	 * @param mixed $where
+	 * @param array|int|string $where
 	 * @param array $options
 	 * @return bool|string
 	 */
-	public function delete(string $table, $where = [], array $options = [])
+	public function delete(string $table, array|int|string $where = [], array $options = [])
 	{
 		$options = array_merge([
 			'confirm' => false,
@@ -843,11 +843,11 @@ class Db extends Module
 
 	/**
 	 * @param string $table
-	 * @param mixed $where
+	 * @param array|int|string $where
 	 * @param array $opt
-	 * @return mixed
+	 * @return iterable|string
 	 */
-	public function select_all(string $table, $where = [], array $opt = [])
+	public function select_all(string $table, array|int|string $where = [], array $opt = []): iterable|string
 	{
 		$opt['multiple'] = true;
 		return $this->select($table, $where, $opt);
@@ -855,11 +855,11 @@ class Db extends Module
 
 	/**
 	 * @param string $table
-	 * @param mixed $where
+	 * @param array|int|string $where
 	 * @param array|string $opt
 	 * @return mixed
 	 */
-	public function select(string $table, $where = [], $opt = [])
+	public function select(string $table, array|int|string $where = [], array|string $opt = []): mixed
 	{
 		$this->initDb();
 
@@ -1221,8 +1221,7 @@ class Db extends Module
 		foreach ($q as $r) {
 			if ($isMultilang)
 				$r = $this->multilangFallback($table, $r, $options);
-			$data = $this->normalizeTypesInSelect($table, $r);
-			yield $data;
+			yield $this->normalizeTypesInSelect($table, $r);
 		}
 	}
 
@@ -1292,11 +1291,11 @@ class Db extends Module
 
 	/**
 	 * @param string $table
-	 * @param mixed $where
+	 * @param array|int|string $where
 	 * @param array $opt
 	 * @return int
 	 */
-	public function count(string $table, $where = [], array $opt = []): int
+	public function count(string $table, array|int|string $where = [], array $opt = []): int
 	{
 		$tableModel = $this->getTable($table);
 		$where = $this->preliminaryWhereProcessing($tableModel, $where);
@@ -2159,7 +2158,7 @@ class Db extends Module
 	 * @param mixed $v
 	 * @return string
 	 */
-	public function parseValue($v): string
+	public function parseValue(mixed $v): string
 	{
 		if ($v === null)
 			return 'NULL';
@@ -2185,10 +2184,10 @@ class Db extends Module
 
 	/**
 	 * @param Table $tableModel
-	 * @param $where
+	 * @param array|int|string $where
 	 * @return array
 	 */
-	private function preliminaryWhereProcessing(Table $tableModel, $where): array
+	private function preliminaryWhereProcessing(Table $tableModel, array|int|string $where): array
 	{
 		if (is_array($where)) {
 			return $where;
@@ -2197,8 +2196,6 @@ class Db extends Module
 				$where = [$tableModel->primary => $where];
 			elseif (is_string($where))
 				$where = [$where];
-			else
-				throw new \Exception('Formato where errato');
 
 			return $where;
 		}
