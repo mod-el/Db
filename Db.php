@@ -152,6 +152,7 @@ class Db extends Module
 	 */
 	public function quote(string $qry, int $type = \PDO::PARAM_STR): string|false
 	{
+		$this->initDb();
 		return $this->db->quote($qry, $type);
 	}
 
