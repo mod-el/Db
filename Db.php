@@ -514,12 +514,12 @@ class Db extends Module
 		$defaults = null;
 		$qry_rows = [];
 
-		$tableModel = $this->getTable($table);
-
 		foreach ($rows as $data) {
 			if ($data === []) {
 				if ($defaults === null) {
-					foreach ($tableModel->columns as $k => $c) {
+					$tableModel = $this->getTable($table);
+
+					foreach ($tableModel->columns as $c) {
 						if ($c['null']) {
 							$defaults[] = 'NULL';
 						} else {
