@@ -1,12 +1,15 @@
 <?php namespace Model\Db;
 
 use Model\Core\Module;
+use Model\DbParser\Parser;
+use Model\DbParser\Table;
 
 class Db extends Module
 {
+	protected Parser $parser;
 	protected ?\PDO $db = null;
 	/** @var Table[] */
-	protected array $tables = [];
+	protected array $tables = []; // TODO: rimuovere quando le custom table e le multilang table saranno gestite dalle nuove librerie
 
 	public string $name;
 	public string $unique_id;
@@ -391,13 +394,13 @@ class Db extends Module
 
 			if (isset($this->cachedTables[$table])) {
 				$dataForCache = array_merge($data['data'], count($data['multilang']) > 0 ? reset($data['multilang']) : []);
-				$dataForCache[$tableModel->primary] = $id;
+				$dataForCache[$tableModel->primary[0]] = $id;
 			}
 
 			if (array_key_exists($table, $this->options['linked-tables'])) {
 				$linked_table = $this->options['linked-tables'][$table]['with'];
 				$linkedTableModel = $this->getTable($linked_table);
-				$data['custom-data'][$linkedTableModel->primary] = $id;
+				$data['custom-data'][$linkedTableModel->primary[0]] = $id;
 
 				$qry = $this->makeQueryForInsert($linked_table, [$data['custom-data']], $options);
 				if (!$qry)
@@ -418,7 +421,7 @@ class Db extends Module
 						if (!isset($mlRowsMap[$lang]))
 							throw new \Exception('Errore nell\'inserimento custom multilang, rows map id non trovato');
 
-						$multilangData[$multilangTableModel->primary] = $mlRowsMap[$lang];
+						$multilangData[$multilangTableModel->primary[0]] = $mlRowsMap[$lang];
 						$qry = $this->makeQueryForInsert($multilangTable, [$multilangData], $options);
 						if (!$qry)
 							$this->model->error('Error while generating query for multilang insert');
@@ -602,15 +605,15 @@ class Db extends Module
 		try {
 			$this->beginTransaction();
 
-			if ($options['version'] !== null and array_keys($where) === [$tableModel->primary]) {
-				$lastVersion = $this->getVersionLock($table, $where[$tableModel->primary]);
+			if ($options['version'] !== null and array_keys($where) === [$tableModel->primary[0]]) {
+				$lastVersion = $this->getVersionLock($table, $where[$tableModel->primary[0]]);
 
 				if ($lastVersion > $options['version'])
 					$this->model->error('A new version of this element has been saved in the meanwhile. Reload the page and try again.');
 
 				$this->insert('model_version_locks', [
 					'table' => $table,
-					'row' => $where[$tableModel->primary],
+					'row' => $where[$tableModel->primary[0]],
 					'version' => $options['version'] + 1,
 					'date' => date('Y-m-d H:i:s'),
 				]);
@@ -636,15 +639,15 @@ class Db extends Module
 				$ml_where_str = ' WHERE `ml`.' . $this->parseField($multilangOptions['lang']) . ' = ' . $this->parseValue($lang);
 				if ($where_str)
 					$ml_where_str .= ' AND (' . $where_str . ')';
-				$qry = 'UPDATE ' . $this->parseField($multilangTable) . ' AS `ml` INNER JOIN ' . $this->parseField($table) . ' AS `t` ON `t`.`' . $tableModel->primary . '` = `ml`.' . $this->parseField($multilangOptions['keyfield']) . ' SET ' . $this->makeSqlString($table, $multilangData, ',', ['for_where' => false, 'main_alias' => 'ml']) . $ml_where_str;
+				$qry = 'UPDATE ' . $this->parseField($multilangTable) . ' AS `ml` INNER JOIN ' . $this->parseField($table) . ' AS `t` ON `t`.`' . $tableModel->primary[0] . '` = `ml`.' . $this->parseField($multilangOptions['keyfield']) . ' SET ' . $this->makeSqlString($table, $multilangData, ',', ['for_where' => false, 'main_alias' => 'ml']) . $ml_where_str;
 
 				if ($options['debug'] and DEBUG_MODE)
 					echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
 
 				$result = $this->query($qry, $table, 'UPDATE', $options);
-				if ($result->rowCount() === 0 and isset($where[$tableModel->primary])) { // If there is no multilang row in the db, and I have the row id, I create one
+				if ($result->rowCount() === 0 and isset($where[$tableModel->primary[0]])) { // If there is no multilang row in the db, and I have the row id, I create one
 					$multilangWhere = [
-						$multilangOptions['keyfield'] => $where[$tableModel->primary],
+						$multilangOptions['keyfield'] => $where[$tableModel->primary[0]],
 						$multilangOptions['lang'] => $lang,
 					];
 					if ($this->count($multilangTable, $multilangWhere) === 0) // I actually check that the row does not exist (rowCount can return 0 if the updated data are identical to the existing ones)
@@ -657,7 +660,7 @@ class Db extends Module
 				$linkedTableModel = $this->getTable($linked_table);
 
 				if ($data['custom-data']) {
-					$qry = 'UPDATE ' . $this->parseField($linked_table) . ' AS `c` INNER JOIN ' . $this->parseField($table) . ' AS `t` ON `t`.`' . $tableModel->primary . '` = `c`.`' . $linkedTableModel->primary . '` SET ' . $this->makeSqlString($linked_table, $data['custom-data'], ',', ['for_where' => false, 'main_alias' => 'c']) . ($where_str ? ' WHERE ' . $where_str : '');
+					$qry = 'UPDATE ' . $this->parseField($linked_table) . ' AS `c` INNER JOIN ' . $this->parseField($table) . ' AS `t` ON `t`.`' . $tableModel->primary[0] . '` = `c`.`' . $linkedTableModel->primary[0] . '` SET ' . $this->makeSqlString($linked_table, $data['custom-data'], ',', ['for_where' => false, 'main_alias' => 'c']) . ($where_str ? ' WHERE ' . $where_str : '');
 
 					if ($options['debug'] and DEBUG_MODE)
 						echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
@@ -679,7 +682,7 @@ class Db extends Module
 						$ml_where_str = ' WHERE `ml`.' . $this->parseField($multilangOptions['lang']) . ' = ' . $this->parseValue($lang);
 						if ($where_str)
 							$ml_where_str .= ' AND (' . $where_str . ')';
-						$qry = 'UPDATE ' . $this->parseField($customMultilangTable) . ' AS `custom_ml` INNER JOIN ' . $this->parseField($multilangTable) . ' AS `ml` ON `ml`.`' . $multilangTableModel->primary . '` = `custom_ml`.`' . $customMultilangModel->primary . '` INNER JOIN ' . $this->parseField($table) . ' AS `t` ON `t`.`' . $tableModel->primary . '` = `ml`.' . $this->parseField($multilangOptions['keyfield']) . ' SET ' . $this->makeSqlString($customMultilangTable, $multilangData, ',', ['for_where' => false, 'main_alias' => 'custom_ml']) . $ml_where_str;
+						$qry = 'UPDATE ' . $this->parseField($customMultilangTable) . ' AS `custom_ml` INNER JOIN ' . $this->parseField($multilangTable) . ' AS `ml` ON `ml`.`' . $multilangTableModel->primary[0] . '` = `custom_ml`.`' . $customMultilangModel->primary[0] . '` INNER JOIN ' . $this->parseField($table) . ' AS `t` ON `t`.`' . $tableModel->primary[0] . '` = `ml`.' . $this->parseField($multilangOptions['keyfield']) . ' SET ' . $this->makeSqlString($customMultilangTable, $multilangData, ',', ['for_where' => false, 'main_alias' => 'custom_ml']) . $ml_where_str;
 
 						if ($options['debug'] and DEBUG_MODE)
 							echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
@@ -723,7 +726,7 @@ class Db extends Module
 	{
 		$tableModel = $this->getTable($table);
 		if (!is_array($where) and is_numeric($where))
-			$where = [$tableModel->primary => $where];
+			$where = [$tableModel->primary[0] => $where];
 
 		$check = $this->select($table, $where, [
 			'auto_ml' => false,
@@ -731,7 +734,7 @@ class Db extends Module
 		]);
 		if ($check) {
 			$this->update($table, $where, $data, $options);
-			return $check[$tableModel->primary];
+			return $check[$tableModel->primary[0]];
 		} else {
 			return $this->insert($table, array_merge($where, $data), $options);
 		}
@@ -936,7 +939,7 @@ class Db extends Module
 				'type' => 'LEFT',
 				'table' => $mlTable,
 				'alias' => 'lang',
-				'full_on' => 'lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $tableModel->primary . '` AND lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->parseValue($options['lang']),
+				'full_on' => 'lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $tableModel->primary[0] . '` AND lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->parseValue($options['lang']),
 				'fields' => $mlFields,
 			];
 		}
@@ -963,7 +966,7 @@ class Db extends Module
 
 				$customFields = [];
 				foreach ($customTableModel->columns as $column_name => $column) {
-					if ($column_name === $customTableModel->primary)
+					if ($column_name === $customTableModel->primary[0])
 						continue;
 					$customFields[] = $column_name;
 				}
@@ -972,8 +975,8 @@ class Db extends Module
 					'type' => 'LEFT',
 					'table' => $customTable,
 					'alias' => 'custom',
-					'on' => $tableModel->primary,
-					'join_field' => $customTableModel->primary,
+					'on' => $tableModel->primary[0],
+					'join_field' => $customTableModel->primary[0],
 					'fields' => $customFields,
 				];
 
@@ -989,7 +992,7 @@ class Db extends Module
 						'type' => 'LEFT',
 						'table' => $customTable . $ml['suffix'],
 						'alias' => 'custom_lang',
-						'full_on' => 'custom_lang.' . $mlCustomTableModel->primary . ' = lang.`' . $mlTableModel->primary . '`',
+						'full_on' => 'custom_lang.' . $mlCustomTableModel->primary[0] . ' = lang.`' . $mlTableModel->primary[0] . '`',
 						'fields' => $mlFields,
 					];
 				}
@@ -1240,14 +1243,14 @@ class Db extends Module
 		$mlTable = $this->model->_Multilang->tables[$table];
 
 		$tableModel = $this->getTable($table);
-		if (!isset($data[$tableModel->primary]))
+		if (!isset($data[$tableModel->primary[0]]))
 			return $data;
 
 		if ($this->checkIfValidForFallback($data, $mlTable))
 			return $data;
 
 		$where = [
-			$tableModel->primary => $data[$tableModel->primary],
+			$tableModel->primary[0] => $data[$tableModel->primary[0]],
 		];
 
 		foreach (($options['joins'] ?? []) as $idx => $join) {
@@ -1354,7 +1357,7 @@ class Db extends Module
 				'type' => 'LEFT',
 				'table' => $mlTable,
 				'alias' => 'lang',
-				'full_on' => 'lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $tableModel->primary . '` AND lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->parseValue($options['lang']),
+				'full_on' => 'lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $tableModel->primary[0] . '` AND lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->parseValue($options['lang']),
 				'fields' => $mlFields,
 			];
 		}
@@ -1365,7 +1368,7 @@ class Db extends Module
 
 			$customFields = [];
 			foreach ($customTableModel->columns as $column_name => $column) {
-				if ($column_name === $customTableModel->primary)
+				if ($column_name === $customTableModel->primary[0])
 					continue;
 				$customFields[] = $column_name;
 			}
@@ -1374,8 +1377,8 @@ class Db extends Module
 				'type' => 'LEFT',
 				'table' => $customTable,
 				'alias' => 'custom',
-				'on' => $tableModel->primary,
-				'join_field' => $customTableModel->primary,
+				'on' => $tableModel->primary[0],
+				'join_field' => $customTableModel->primary[0],
 				'fields' => $customFields,
 			];
 
@@ -1393,7 +1396,7 @@ class Db extends Module
 					'type' => 'LEFT',
 					'table' => $customTable . $ml['suffix'],
 					'alias' => 'custom_lang',
-					'full_on' => 'custom_lang.' . $this->parseField($mlCustomTableModel->primary) . ' = lang.`' . $mlTableModel->primary . '`',
+					'full_on' => 'custom_lang.' . $this->parseField($mlCustomTableModel->primary[0]) . ' = lang.`' . $mlTableModel->primary[0] . '`',
 					'fields' => $mlFields,
 				];
 			}
@@ -1643,44 +1646,49 @@ class Db extends Module
 			$joinTableModel = $this->getTable($join['table']);
 
 			if (!isset($join['on'], $join['join_field']) and !isset($join['full_on'])) {
-				if ($tableModel === false)
-					$this->model->error('Errore durante la lettura dei dati.', 'Durante la lettura da <b>' . $table . '</b> e la join con la tabella <b>' . $join['table'] . '</b>, non sono stati fornite le colonne di aggancio (e non esiste modello per la tabella).');
-
-				if (isset($join['on'])) { // Se sappiamo già quale colonna usare, andiamo a vedere se c'è una FK associata da cui prendere anche la colonna corrispondente nell'altra tabella
+				if (isset($join['on'])) {
+					// Se sappiamo già quale colonna usare, andiamo a vedere se c'è una FK associata da cui prendere anche la colonna corrispondente nell'altra tabella
 					if (!isset($tableModel->columns[$join['on']]))
 						$this->model->error('Errore join', 'Sembra non esistere la colonna "' . $join['on'] . '" nella tabella "' . $table . '"!');
-					if (!array_key_exists('foreign_key', $tableModel->columns[$join['on']]))
-						$this->model->error('Errore join', 'Tipo di modello tabella obsoleto, non esiste anche lettura FK.');
-					if (!$tableModel->columns[$join['on']]['foreign_key'])
-						$this->model->error('Errore join', 'Nessuna FK sulla colonna "' . $join['on'] . '" della tabella "' . $table . '".');
 
-					$foreign_key = $tableModel->foreign_keys[$tableModel->columns[$join['on']]['foreign_key']];
-					if ($foreign_key['ref_table'] != $join['table'])
-						$this->model->error('Errore join', 'La colonna "' . $join['on'] . '" della tabella "' . $table . '" punta a una tabella diversa da "' . $join['table'] . '" ("' . $foreign_key['ref_table'] . '").');
+					$fk_found = false;
+					foreach ($tableModel->columns[$join['on']]['foreign_keys'] as $foreign_key) {
+						if ($foreign_key['ref_table'] === $join['table']) {
+							$join['join_field'] = $foreign_key['ref_column'];
+							$fk_found = true;
+							break;
+						}
+					}
 
-					$join['join_field'] = $foreign_key['ref_column'];
-				} else { // Altrimenti, cerchiamo di capire quale colonna usare rovistando fra le FK
-					$foreign_key = false;
-					foreach ($tableModel->foreign_keys as $fk) {
-						if ($fk['ref_table'] == $join['table']) {
-							if ($foreign_key === false) {
-								$foreign_key = $fk;
-							} else { // Ambiguo: due foreign key per la stessa tabella, non posso capire quale sia quella giusta
-								$this->model->error('Errore join', 'Ci sono due foreign key nella tabella "' . $table . '" che puntano a "' . $join['table'] . '", usare la clausola "on" per specificare quale colonna utilizzare.');
+					if (!$fk_found)
+						$this->model->error('Errore join', 'Nessuna FK sulla colonna "' . $join['on'] . '" che punti a "' . $join['table'] . '".');
+				} else {
+					// Altrimenti, cerchiamo di capire quale colonna usare rovistando fra le FK
+					$foreign_key = null;
+					foreach ($tableModel->columns as $column) {
+						foreach ($column['foreign_keys'] as $fk) {
+							if ($fk['ref_table'] === $join['table']) {
+								if ($foreign_key === null) {
+									$foreign_key = $fk;
+								} else { // Ambiguo: due foreign key per la stessa tabella, non posso capire quale sia quella giusta
+									$this->model->error('Errore join', 'Ci sono due foreign key nella tabella "' . $table . '" che puntano a "' . $join['table'] . '", usare la clausola "on" per specificare quale colonna utilizzare.');
+								}
 							}
 						}
 					}
 
-					if ($foreign_key !== false) {
+					if ($foreign_key !== null) {
 						$join['on'] = $foreign_key['column'];
 						$join['join_field'] = $foreign_key['ref_column'];
 					} else {
-						foreach ($joinTableModel->foreign_keys as $fk) {
-							if ($fk['ref_table'] == $table) {
-								if ($foreign_key === false) {
-									$foreign_key = $fk;
-								} else { // Ambiguo: due foreign key per la stessa tabella, non posso capire quale sia quella giusta
-									$this->model->error('Errore join', 'Ci sono due foreign key nella tabella "' . $join['table'] . '" che puntano a "' . $table . '", usare le clausole "on"/"join_field" per specificare quali colonne utilizzare.');
+						foreach ($joinTableModel->columns as $column) {
+							foreach ($column['foreign_keys'] as $fk) {
+								if ($fk['ref_table'] === $table) {
+									if ($foreign_key === null) {
+										$foreign_key = $fk;
+									} else { // Ambiguo: due foreign key per la stessa tabella, non posso capire quale sia quella giusta
+										$this->model->error('Errore join', 'Ci sono due foreign key nella tabella "' . $join['table'] . '" che puntano a "' . $table . '", usare le clausole "on"/"join_field" per specificare quali colonne utilizzare.');
+									}
 								}
 							}
 						}
@@ -1691,23 +1699,19 @@ class Db extends Module
 						}
 					}
 
-					if ($foreign_key === false)
+					if ($foreign_key === null)
 						$this->model->error('Errore join', 'Non trovo nessuna foreign key che leghi le tabelle "' . $table . '" e "' . $join['table'] . '". Specificare i parametri a mano.');
 				}
 			}
 
 			if (!isset($join['full_fields'])) {
 				if (!isset($join['fields'])) {
-					if ($joinTableModel === false)
-						$this->model->error('Errore durante la lettura dei dati.', 'Durante la lettura da <b>' . $table . '</b> e la join con la tabella <b>' . $join['table'] . '</b>, non sono stati forniti i campi da prendere da quest\'ultima (e non esiste modello per la tabella).');
-
 					$join['fields'] = [];
 					foreach ($joinTableModel->columns as $k_c => $c) {
-						if (isset($tableModel->columns[$k_c])) {
+						if (isset($tableModel->columns[$k_c]))
 							$join['fields'][] = ['field' => $k_c, 'as' => $join['table'] . '_' . $k_c];
-						} else {
+						else
 							$join['fields'][] = $k_c;
-						}
 					}
 				}
 
@@ -1734,21 +1738,64 @@ class Db extends Module
 			'checkTypes' => true,
 			'checkLengths' => false,
 		], $options);
-		if ($options['check'] === false or !$this->getTable($table, false)) // Se è stata disabilitata la verifica dalle opzioni, oppure non esiste file di configurazione per questa tabella, salto la verifica
+
+		if ($options['check'] === false) // Se è stata disabilitata la verifica dalle opzioni, salto la verifica
 			return true;
 
+		$tableModel = $this->getTable($table);
 		foreach ($data as $k => $v) {
-			if (!array_key_exists($k, $this->getTable($table)->columns)) {
-				$this->model->error('Error while writing data.', 'Database column "' . $table . '.' . $k . '" does not exist! (either that or cache needs to be generated)');
-			}
+			if (!array_key_exists($k, $tableModel->columns))
+				$this->model->error('Error while writing data.', 'Database column "' . $table . '.' . $k . '" does not exist! (either that or cache needs to be regenerated)');
+
 			if ($options['checkTypes']) {
-				if (!$this->getTable($table)->checkType($k, $v, $options)) {
+				if (!$this->checkType($tableModel->columns[$k], $v, $options))
 					$this->model->error('Error while writing data.', 'Data type for column "' . $table . '.' . $k . '" does not match!<br />' . zkdump($v, true, true));
-				}
 			}
 		}
 
 		return true;
+	}
+
+	private function checkType(array $column, mixed $v, array $options): bool
+	{
+		if ($v === null)
+			return (bool)$column['null'];
+
+		switch ($column['type']) {
+			case 'int':
+			case 'tinyint':
+			case 'smallint':
+			case 'mediumint':
+			case 'bigint':
+			case 'float':
+			case 'decimal':
+			case 'double':
+			case 'year':
+				if (!empty($v) and !is_numeric($v))
+					return false;
+				return true;
+
+			case 'char':
+			case 'varchar':
+				if ($options['checkLengths']) {
+					if (strlen($v) > $column['length'])
+						return false;
+				}
+				return true;
+
+			case 'date':
+			case 'datetime':
+				if (is_object($v) and get_class($v) == 'DateTime')
+					$checkData = $v;
+				else
+					$checkData = date_create($v);
+				if (!$checkData)
+					return false;
+				return true;
+
+			default:
+				return true;
+		}
 	}
 
 	/**
@@ -1816,7 +1863,7 @@ class Db extends Module
 
 			$customTableModel = $this->getTable($customTable . '_texts');
 			foreach ($customTableModel->columns as $k => $column) {
-				if ($k === $customTableModel->primary or $k === 'parent' or $k === 'lang')
+				if ($k === $customTableModel->primary[0] or $k === 'parent' or $k === 'lang')
 					continue;
 
 				$this->model->_Multilang->tables[$customTable]['fields'][] = $k;
@@ -2193,10 +2240,16 @@ class Db extends Module
 		if (is_array($where)) {
 			return $where;
 		} else {
-			if (is_numeric($where))
-				$where = [$tableModel->primary => $where];
-			elseif (is_string($where))
+			if (is_numeric($where)) {
+				if (count($tableModel->primary) !== 1)
+					throw new \Exception('In order to select by id, table must have only one primary key');
+
+				$where = [
+					$tableModel->primary[0] => $where,
+				];
+			} elseif (is_string($where)) {
 				$where = [$where];
+			}
 
 			return $where;
 		}
@@ -2455,45 +2508,37 @@ class Db extends Module
 	}
 
 	/**
-	 * @param string $table
-	 * @return Table|null
+	 * @param string $name
+	 * @return Table
 	 */
-	public function getTable(string $table): ?Table
+	public function getTable(string $name): Table
 	{
-		if (!isset($this->tables[$table])) {
-			if (file_exists(__DIR__ . '/data/' . $this->unique_id . '/' . $table . '.php')) {
-				include(__DIR__ . '/data/' . $this->unique_id . '/' . $table . '.php');
-				if (!isset($foreign_keys))
-					$foreign_keys = [];
-				$this->tables[$table] = new Table($table, $table_columns, $foreign_keys);
+		if (isset($this->tables[$name]))
+			return $this->tables[$name];
 
-				$customTableModel = null;
-				if (array_key_exists($table, $this->options['linked-tables'])) {
-					$customTableModel = $this->getTable($this->options['linked-tables'][$table]['with']);
-				} elseif ($this->model->isLoaded('Multilang')) {
-					foreach ($this->model->_Multilang->tables as $mlTable => $mlTableOptions) {
-						if ($mlTable . $mlTableOptions['suffix'] === $table and array_key_exists($mlTable, $this->options['linked-tables'])) {
-							$customTableModel = $this->getTable($this->options['linked-tables'][$mlTable]['with'] . $mlTableOptions['suffix']);
-							break;
-						}
-					}
+		if (!isset($this->parser)) {
+			$this->initDb();
+			$this->parser = new Parser($this->db);
+		}
+
+		$tableModel = $this->parser->getTable($name);
+
+		$customTableModel = null;
+		if (array_key_exists($name, $this->options['linked-tables'])) {
+			$customTableModel = $this->parser->getTable($this->options['linked-tables'][$name]['with']);
+		} elseif ($this->model->isLoaded('Multilang')) {
+			foreach ($this->model->_Multilang->tables as $mlTable => $mlTableOptions) {
+				if ($mlTable . $mlTableOptions['suffix'] === $name and array_key_exists($mlTable, $this->options['linked-tables'])) {
+					$customTableModel = $this->parser->getTable($this->options['linked-tables'][$mlTable]['with'] . $mlTableOptions['suffix']);
+					break;
 				}
-
-				if ($customTableModel) {
-					foreach ($customTableModel->columns as $k => $column) {
-						if ($k === $customTableModel->primary or isset($this->tables[$table]->columns[$k]))
-							continue;
-						$column['real'] = false;
-						$this->tables[$table]->columns[$k] = $column;
-					}
-
-					$this->tables[$table]->foreign_keys = array_merge($this->tables[$table]->foreign_keys, $customTableModel->foreign_keys);
-				}
-			} else {
-				$this->model->error('Can\'t find table model for "' . entities($table) . '" in cache.');
 			}
 		}
-		return $this->tables[$table];
+
+		if ($customTableModel)
+			$tableModel->loadColumns($customTableModel->columns, false);
+
+		return $tableModel;
 	}
 
 	/**

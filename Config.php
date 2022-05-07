@@ -1,5 +1,6 @@
 <?php namespace Model\Db;
 
+use Model\Cache\Cache;
 use Model\Core\Autoloader;
 use Model\Core\Module_Config;
 
@@ -17,19 +18,14 @@ class Config extends Module_Config
 	}
 
 	/**
-	 * Caches all the tables structure
+	 * Invalidates tables cache, and execute migrations
 	 *
 	 * @return bool
 	 */
 	public function makeCache(): bool
 	{
-		$path = INCLUDE_PATH . 'model' . DIRECTORY_SEPARATOR . 'Db' . DIRECTORY_SEPARATOR;
-
-		if (!is_writable($path))
-			$this->model->error('DB module path is not writable!');
-
-		if (!is_dir($path . 'data'))
-			mkdir($path . 'data');
+		$cache = Cache::getCacheAdapter();
+		$cache->invalidateTags(['db.table']);
 
 		$config = $this->retrieveConfig();
 		if (!$config or !isset($config['databases']))
@@ -40,112 +36,12 @@ class Config extends Module_Config
 				'db' => $db_name,
 			], $db_name);
 
-			if (!is_dir($path . 'data' . DIRECTORY_SEPARATOR . $db->unique_id))
-				mkdir($path . 'data' . DIRECTORY_SEPARATOR . $db->unique_id);
-
 			if (!isset($db_options['migrate']))
 				$db_options['migrate'] = $db_name === 'primary';
 
 			if ($db_options['migrate']) {
 				$migrate = new Migrate($db_name, $db);
 				$migrate->exec();
-			}
-
-			$references = []; // References of each table (via foreign keys) in other tables
-			$tables = $db->query('SHOW TABLES');
-			foreach ($tables as $t) {
-				$table = $t['Tables_in_' . $db->name];
-
-				/*** COLONNE ***/
-				$tq = $db->query('EXPLAIN `' . $table . '`');
-				$columns = [];
-				foreach ($tq as $c) {
-					if (preg_match('/^enum\(.+\).*$/i', $c['Type'])) {
-						$type = 'enum';
-						$values = explode(',', preg_replace('/^enum\((.+)\).*$/i', '$1', $c['Type']));
-						foreach ($values as &$v)
-							$v = preg_replace('/^\'(.+)\'$/i', '$1', $v);
-						unset($v);
-						$length = $values;
-					} elseif (preg_match('/^.+\([0-9,]+\).*$/i', $c['Type'])) {
-						$type = strtolower(preg_replace('/^(.+)\([0-9,]+\).*$/i', '\\1', $c['Type']));
-						$length = preg_replace('/^.+\(([0-9,]+)\).*$/i', '\\1', $c['Type']);
-					} else {
-						$type = $c['Type'];
-						$length = false;
-					}
-
-					$null = $c['Null'] == 'YES';
-
-					$col = [
-						'type' => $type,
-						'length' => $length,
-						'null' => $null,
-						'key' => $c['Key'],
-						'default' => $c['Default'],
-						'extra' => $c['Extra'],
-						'foreign_key' => null
-					];
-					$columns[$c['Field']] = $col;
-				}
-
-				/*** FOREIGN KEYS ***/
-				$foreign_keys = [];
-				$create = $db->query('SHOW CREATE TABLE `' . $table . '`')->fetch();
-				if ($create and isset($create['Create Table'])) {
-					$create = $create['Create Table'];
-					$righe_query = explode("\n", str_replace("\r", '', $create));
-					foreach ($righe_query as $r) {
-						$r = trim($r);
-						if (substr($r, 0, 10) == 'CONSTRAINT') {
-							preg_match_all('/CONSTRAINT `(.+?)` FOREIGN KEY \(`(.+?)`\) REFERENCES `(.+?)` \(`(.+?)`\)/i', $r, $matches, PREG_SET_ORDER);
-
-							if (count($matches[0]) != 5)
-								continue;
-							$fk = $matches[0];
-
-							if (!isset($columns[$fk[2]]))
-								echo '<b>Warning:</b> something is wrong, column ' . $fk[2] . ', declared in foreign key ' . $fk[1] . ' doesn\'t seem to exist!<br />';
-							$columns[$fk[2]]['foreign_key'] = $fk[1];
-
-							$on_update = 'RESTRICT';
-							if (preg_match('/ON UPDATE (NOT NULL|DELETE|CASCADE|NO ACTION)/i', $r, $upd_match))
-								$on_update = $upd_match[1];
-
-							$on_delete = 'RESTRICT';
-							if (preg_match('/ON DELETE (NOT NULL|DELETE|CASCADE|NO ACTION)/i', $r, $del_match))
-								$on_delete = $del_match[1];
-
-							$foreign_keys[$fk[1]] = [
-								'column' => $fk[2],
-								'ref_table' => $fk[3],
-								'ref_column' => $fk[4],
-								'update' => $on_update,
-								'delete' => $on_delete,
-							];
-
-							if (!isset($references[$fk[3]]))
-								$references[$fk[3]] = [];
-							$references[$fk[3]][] = [
-								'table' => $table,
-								'fk_column' => $fk[2],
-								'column' => $fk[4],
-								'fk' => $fk[1],
-							];
-						}
-					}
-				}
-
-				$scrittura = file_put_contents($path . 'data' . DIRECTORY_SEPARATOR . $db->unique_id . '/' . $table . '.php', '<?php
-$table_columns = ' . var_export($columns, true) . ';
-$foreign_keys = ' . var_export($foreign_keys, true) . ';
-');
-				if (!$scrittura)
-					return false;
-			}
-
-			foreach ($references as $table => $ref) {
-				file_put_contents($path . 'data' . DIRECTORY_SEPARATOR . $db->unique_id . '/' . $table . '.php', '$references = ' . var_export($ref, true) . ';', FILE_APPEND);
 			}
 		}
 
