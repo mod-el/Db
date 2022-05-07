@@ -1128,10 +1128,13 @@ class Db extends Module
 			if ($options['having'])
 				$qry .= ' HAVING ' . $this->makeSqlString($table, $options['having'], ' AND ', array_merge($make_options, ['add-alias' => false, 'prefix' => 'zkaggr_']));
 		}
-		if ($options['order_by'])
-			$qry .= ' ORDER BY ' . ($options['order_by']);
+		if ($options['order_by']) {
+			if ($tableModel->primary and $options['order_by'] === $tableModel->primary[0])
+				$options['order_by'] = 't.' . $options['order_by'];
+			$qry .= ' ORDER BY ' . $options['order_by'];
+		}
 		if ($options['limit'])
-			$qry .= ' LIMIT ' . ($options['limit']);
+			$qry .= ' LIMIT ' . $options['limit'];
 
 		if ($options['return_query'])
 			return $qry;
