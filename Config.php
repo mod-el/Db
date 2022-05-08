@@ -18,15 +18,12 @@ class Config extends Module_Config
 	}
 
 	/**
-	 * Invalidates tables cache, and execute migrations
+	 * Executes migrations
 	 *
 	 * @return bool
 	 */
 	public function makeCache(): bool
 	{
-		$cache = Cache::getCacheAdapter();
-		$cache->invalidateTags(['db.table']);
-
 		$config = $this->retrieveConfig();
 		if (!$config or !isset($config['databases']))
 			return true;
