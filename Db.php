@@ -1636,12 +1636,10 @@ class Db extends Module
 		foreach ($joins as $k => $join) {
 			if (!is_array($join))
 				$join = ['table' => $join];
-			if (!isset($join['table']) and !isset($join['fields']) and !isset($join['on']) and !isset($join['main_field']) and !isset($join['full_on']))
+			if (!isset($join['table']) and !isset($join['fields']) and !isset($join['on']) and !isset($join['full_on']))
 				$join = ['fields' => $join];
 			if (!is_numeric($k) and !isset($join['table']))
 				$join['table'] = $k;
-			if (!isset($join['where']))
-				$join['where'] = [];
 			if (!isset($join['table']))
 				$this->model->error('Formato join errato');
 
