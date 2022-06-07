@@ -789,7 +789,7 @@ class Db extends Module
 			} else {
 				$join_where = array_merge([
 					$joinAlias . '.' . $this->parseField($join['join_field']) . ' = t.' . $this->parseField($join['on']),
-				], $join['where']);
+				], $join['where'] ?? []);
 
 				$join_str .= ' ' . $join['type'] . ' JOIN ' . $this->parseField($join['table']) . ' ' . $joinAlias . ' ON (' . $this->makeSqlString($table, $join_where, 'AND', ['joins' => $joins]) . ')';
 			}
@@ -1032,7 +1032,7 @@ class Db extends Module
 			} else {
 				$join_where = array_merge([
 					$joinAlias . '.' . $this->parseField($join['join_field']) . ' = t.' . $this->parseField($join['on']),
-				], $join['where']);
+				], $join['where'] ?? []);
 
 				$join_str .= ' ' . $join['type'] . ' JOIN ' . $this->parseField($join['table']) . ' ' . $joinAlias . ' ON (' . $this->makeSqlString($table, $join_where, 'AND', ['joins' => $joins]) . ')';
 			}
@@ -1422,7 +1422,7 @@ class Db extends Module
 			} else {
 				$join_where = array_merge([
 					$joinAlias . '.' . $this->parseField($join['join_field']) . ' = t.' . $this->parseField($join['on']),
-				], $join['where']);
+				], $join['where'] ?? []);
 
 				$join_str .= ' ' . $join['type'] . ' JOIN ' . $this->parseField($join['table']) . ' ' . $joinAlias . ' ON (' . $this->makeSqlString($table, $join_where, 'AND', ['joins' => $joins]) . ')';
 			}
