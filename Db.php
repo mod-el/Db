@@ -20,6 +20,8 @@ class Db extends Module
 
 	protected int $c_transactions = 0;
 
+	private int $forcedTenantId;
+
 	protected array $querylimit_counter = [
 		'query' => [],
 		'table' => [],
@@ -103,10 +105,10 @@ class Db extends Module
 
 			$this->tablesToCache = $this->options['cache-tables'];
 
-			if (!isset($this->options['user-filter']))
-				$this->options['user-filter'] = null;
-			if ($this->options['user-filter'] and (!is_array($this->options['user-filter']) or count($this->options['user-filter']) < 2 or !isset($this->options['user-filter']['idx'], $this->options['user-filter']['column'])))
-				$this->options['user-filter'] = null;
+			if (!isset($this->options['tenant-filter']))
+				$this->options['tenant-filter'] = null;
+			if ($this->options['tenant-filter'] and (!is_array($this->options['tenant-filter']) or count($this->options['tenant-filter']) < 2 or !isset($this->options['tenant-filter']['idx'], $this->options['tenant-filter']['column'])))
+				$this->options['tenant-filter'] = null;
 		}
 	}
 
@@ -315,7 +317,7 @@ class Db extends Module
 			'replace' => false,
 			'defer' => null,
 			'debug' => $this->options['debug'],
-			'skip-user-filter' => false,
+			'skip-tenant-filter' => false,
 		], $options);
 
 		$this->trigger('insert', [
@@ -325,7 +327,7 @@ class Db extends Module
 		]);
 
 		$tableModel = $this->getTable($table);
-		$this->addUserFilter($data, $tableModel, $options);
+		$data = $this->addTenantFilter($data, $tableModel, $options);
 		$data = $this->filterColumns($table, $data);
 		$this->checkDbData($table, $data['data'], $options);
 		if ($data['multilang']) {
@@ -573,7 +575,7 @@ class Db extends Module
 			'confirm' => false,
 			'debug' => $this->options['debug'],
 			'force' => false,
-			'skip-user-filter' => false,
+			'skip-tenant-filter' => false,
 		], $options);
 
 		if (isset($this->deferedInserts[$table]) and !$options['force'])
@@ -582,7 +584,7 @@ class Db extends Module
 		$tableModel = $this->getTable($table);
 		$where = $this->preliminaryWhereProcessing($tableModel, $where);
 
-		$this->addUserFilter($where, $tableModel, $options);
+		$where = $this->addTenantFilter($where, $tableModel, $options);
 
 		$this->trigger('update', [
 			'table' => $table,
@@ -753,7 +755,7 @@ class Db extends Module
 			'joins' => [],
 			'debug' => $this->options['debug'],
 			'force' => false,
-			'skip-user-filter' => false,
+			'skip-tenant-filter' => false,
 			'return_query' => false,
 		], $options);
 
@@ -763,7 +765,7 @@ class Db extends Module
 		$tableModel = $this->getTable($table);
 		$where = $this->preliminaryWhereProcessing($tableModel, $where);
 
-		$this->addUserFilter($where, $tableModel, $options);
+		$where = $this->addTenantFilter($where, $tableModel, $options);
 
 		$this->trigger('delete', [
 			'table' => $table,
@@ -902,13 +904,13 @@ class Db extends Module
 			'return_query' => false,
 			'stream' => true,
 			'quick-cache' => true,
-			'skip-user-filter' => false,
+			'skip-tenant-filter' => false,
 			'auto-join-linked-tables' => true,
 		], $opt);
 		if ($options['multiple'] === false and !$options['limit'])
 			$options['limit'] = 1;
 
-		$this->addUserFilter($where, $tableModel, $options);
+		$where = $this->addTenantFilter($where, $tableModel, $options);
 
 		$this->trigger('select', [
 			'table' => $table,
@@ -1326,11 +1328,11 @@ class Db extends Module
 			'field' => false,
 			'debug' => $this->options['debug'],
 			'return_query' => false,
-			'skip-user-filter' => false,
+			'skip-tenant-filter' => false,
 		];
 		$options = array_merge($options, $opt);
 
-		$this->addUserFilter($where, $tableModel, $options);
+		$where = $this->addTenantFilter($where, $tableModel, $options);
 
 		$this->trigger('count', [
 			'table' => $table,
@@ -1572,7 +1574,7 @@ class Db extends Module
 
 		$newRow = [];
 		foreach ($row as $k => $v) {
-			if (strpos($k, 'zkaggr_') === 0) // Remove aggregates prefix
+			if (str_starts_with($k, 'zkaggr_')) // Remove aggregates prefix
 				$k = substr($k, 7);
 
 			if ($v !== null and $v !== false) {
@@ -1602,17 +1604,40 @@ class Db extends Module
 	 * @param array $where
 	 * @param Table $tableModel
 	 * @param array $options
+	 * @return array
 	 */
-	private function addUserFilter(array &$where, Table $tableModel, array $options)
+	private function addTenantFilter(array $where, Table $tableModel, array $options): array
 	{
 		if (
-			$this->options['user-filter']
-			and !$options['skip-user-filter']
-			and isset($tableModel->columns[$this->options['user-filter']['column']])
-			and (!isset($this->options['user-filter']['ignore']) or !in_array($tableModel->name, $this->options['user-filter']['ignore']))
+			$this->options['tenant-filter']
+			and !$options['skip-tenant-filter']
+			and isset($tableModel->columns[$this->options['tenant-filter']['column']])
+			and (!isset($this->options['tenant-filter']['ignore']) or !in_array($tableModel->name, $this->options['tenant-filter']['ignore']))
 		) {
-			$where[$this->options['user-filter']['column']] = $this->model->getModule('User', $this->options['user-filter']['idx'])->logged();
+			$where[$this->options['tenant-filter']['column']] = $this->getTenantId();
 		}
+
+		return $where;
+	}
+
+	/**
+	 * @return int|null
+	 */
+	public function getTenantId(): ?int
+	{
+		if ($this->options['tenant-filter'])
+			return $this->forcedTenantId ?? ($this->model->getModule('User', $this->options['tenant-filter']['idx'])->logged() ?: null);
+		else
+			return null;
+	}
+
+	/**
+	 * @param int $id
+	 * @return void
+	 */
+	public function setTenantId(int $id): void
+	{
+		$this->forcedTenantId = $id;
 	}
 
 	/**
