@@ -525,6 +525,9 @@ class Db extends Module
 					$tableModel = $this->getTable($table);
 
 					foreach ($tableModel->columns as $c) {
+						if (!$c['real'])
+							continue;
+
 						if ($c['null']) {
 							$defaults[] = 'NULL';
 						} else {
