@@ -4,7 +4,7 @@ use Model\Core\Module;
 use Model\DbParser\Parser;
 use Model\DbParser\Table;
 
-class Db extends Module
+class DbOld extends Module
 {
 	protected Parser $parser;
 	protected ?\PDO $db = null;
@@ -61,7 +61,7 @@ class Db extends Module
 		if ($this->options['direct-pdo']) {
 			$this->unique_id = 'custom';
 		} else {
-			$config = $this->retrieveConfig();
+			$config = Db::getConfig();
 			if (!$config or !isset($config['databases'][$this->options['db']]))
 				throw new \Exception('Missing database configuration for ' . $this->options['db'] . ' database!');
 
@@ -81,8 +81,8 @@ class Db extends Module
 
 			$this->options = array_merge($configOptions, $this->options);
 
-			$this->name = $this->options['database'];
-			$this->unique_id = preg_replace('/[^A-Za-z0-9._-]/', '', $this->options['host'] . '-' . $this->options['database']);
+			$this->name = $this->options['name'];
+			$this->unique_id = preg_replace('/[^A-Za-z0-9._-]/', '', $this->options['host'] . '-' . $this->options['name']);
 
 			$linkedTables = [];
 			foreach ($this->options['linked-tables'] as $k => $v) {
@@ -121,7 +121,7 @@ class Db extends Module
 			if ($this->options['direct-pdo']) {
 				$this->db = $this->options['direct-pdo'];
 			} else {
-				$this->db = new \PDO('mysql:host=' . $this->options['host'] . ';dbname=' . $this->options['database'] . ';charset=utf8', $this->options['username'], $this->options['password'], [
+				$this->db = new \PDO('mysql:host=' . $this->options['host'] . ':' . $this->options['port'] . ';dbname=' . $this->options['name'] . ';charset=utf8', $this->options['username'], $this->options['password'], [
 					\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
 					\PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
 					\PDO::ATTR_EMULATE_PREPARES => $this->options['emulate_prepares'],

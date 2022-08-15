@@ -4,7 +4,6 @@ use Model\Core\Core;
 
 abstract class Migration
 {
-	protected Db $db;
 	protected Core $model;
 	public string $module;
 	public string $migration_name;
@@ -17,11 +16,10 @@ abstract class Migration
 	public ?bool $ignoreErrors = false;
 
 	/**
-	 * @param Db $db
+	 * @param DbOld $db
 	 */
-	public function __construct(Db $db)
+	public function __construct(protected DbOld $db)
 	{
-		$this->db = $db;
 		$this->model = $db->model;
 
 		$class = explode('\\', get_class($this));

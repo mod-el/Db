@@ -5,14 +5,14 @@ use Model\Core\Autoloader;
 class Migrate
 {
 	private string $db_name;
-	/** @var Db */
-	private Db $db;
+	/** @var DbOld */
+	private DbOld $db;
 
 	/**
 	 * @param string $name
-	 * @param Db $db
+	 * @param DbOld $db
 	 */
-	function __construct(string $name, Db $db)
+	function __construct(string $name, DbOld $db)
 	{
 		$this->db_name = $name;
 		$this->db = $db;

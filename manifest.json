@@ -1,12 +1,12 @@
 {
 	"name": "Db",
 	"description": "Abstraction layer for DB management",
-	"version": "3.0.0",
+	"version": "4.0.0",
 	"dependencies": {
-		"Core": ">=2.10.0"
+		"Core": ">=3.0.0"
 	},
 	"requires": [
-		"model/db-parser"
+		"model/db"
 	],
 	"file-types": {
 		"Migration": {
