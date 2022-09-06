@@ -2547,7 +2547,7 @@ class DbOld extends Module
 
 		if (!isset($this->parser)) {
 			$this->initDb();
-			$this->parser = new Parser($this->db);
+			$this->parser = new Parser($this->db, $this->options['host'] . '.' . $this->options['name']);
 		}
 
 		$tableModel = $this->parser->getTable($name);
