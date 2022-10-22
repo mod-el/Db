@@ -8,8 +8,6 @@ class DbOld extends Module
 {
 	protected Parser $parser;
 	protected ?\PDO $db = null;
-	/** @var Table[] */
-	protected array $tables = []; // TODO: rimuovere quando le custom table e le multilang table saranno gestite dalle nuove librerie
 
 	public string $name;
 	public string $unique_id;
@@ -31,7 +29,7 @@ class DbOld extends Module
 		'db' => 'primary',
 		'listCache' => [], // Deprecated
 		'cache-tables' => [],
-		'linked-tables' => [],
+		'linked_tables' => [],
 		'autoHide' => [],
 		'direct-pdo' => false,
 		'query-limit' => 100,
@@ -76,32 +74,12 @@ class DbOld extends Module
 			if (isset($configOptions['autoHide']))
 				$this->options['autoHide'] = array_unique(array_merge($configOptions['autoHide'], $this->options['autoHide']));
 
-			if (isset($configOptions['linked-tables']))
-				$this->options['linked-tables'] = array_unique(array_merge($configOptions['linked-tables'], $this->options['linked-tables']));
+			$this->options['linked_tables'] = $this->getConnection()->getConfig()['linked_tables'];
 
 			$this->options = array_merge($configOptions, $this->options);
 
 			$this->name = $this->options['name'];
 			$this->unique_id = preg_replace('/[^A-Za-z0-9._-]/', '', $this->options['host'] . '-' . $this->options['name']);
-
-			$linkedTables = [];
-			foreach ($this->options['linked-tables'] as $k => $v) {
-				if (is_numeric($k)) {
-					$linkedTables[$v] = [
-						'with' => $v . '_custom',
-					];
-				} else {
-					if (!is_array($v))
-						$v = ['with' => $v];
-
-					$linkedTables[$k] = array_merge([
-						'with' => $k . '_custom',
-					], $v);
-				}
-			}
-			$this->options['linked-tables'] = $linkedTables;
-			foreach ($this->options['linked-tables'] as $table => $tableOptions)
-				$this->checkLinkedTableMultilang($table);
 
 			$this->tablesToCache = $this->options['cache-tables'];
 
@@ -140,7 +118,7 @@ class DbOld extends Module
 	 * @param array $arguments
 	 * @return mixed
 	 */
-	function __call(string $name, array $arguments): mixed
+	public function __call(string $name, array $arguments): mixed
 	{
 		$this->initDb();
 
@@ -148,6 +126,14 @@ class DbOld extends Module
 			return call_user_func_array([$this->db, $name], $arguments);
 
 		return null;
+	}
+
+	/**
+	 * @return DbConnection
+	 */
+	public function getConnection(): DbConnection
+	{
+		return Db::getConnection($this->options['db']);
 	}
 
 	/**
@@ -326,19 +312,19 @@ class DbOld extends Module
 			'options' => $options,
 		]);
 
-		$tableModel = $this->getTable($table);
+		$tableModel = $this->getConnection()->getTable($table);
 		$data = $this->addTenantFilter($data, $tableModel, $options);
 		$data = $this->filterColumns($table, $data);
 		$this->checkDbData($table, $data['data'], $options);
 		if ($data['multilang']) {
-			$multilangTable = $this->model->_Multilang->getTableFor($table);
-			$multilangOptions = $this->model->_Multilang->getTableOptionsFor($table);
-			foreach ($data['multilang'] as $lang => $multilangData)
+			$multilangTable = \Model\Multilang\Ml::getTableFor($this->getConnection(), $table);
+			$multilangOptions = \Model\Multilang\Ml::getTableOptionsFor($this->getConnection(), $table);
+			foreach ($data['multilang'] as $multilangData)
 				$this->checkDbData($multilangTable, $multilangData, $options);
 		}
 
 		if ($options['defer'] !== null) {
-			if (array_key_exists($table, $this->options['linked-tables']))
+			if (array_key_exists($table, $this->options['linked_tables']))
 				$this->model->error('Cannot defer linked tables');
 
 			if ($data['multilang'])
@@ -381,8 +367,8 @@ class DbOld extends Module
 
 			$mlRowsMap = [];
 			foreach ($data['multilang'] as $lang => $multilangData) {
-				$multilangData[$multilangOptions['keyfield']] = $id;
-				$multilangData[$multilangOptions['lang']] = $lang;
+				$multilangData[$multilangOptions['parent_field']] = $id;
+				$multilangData[$multilangOptions['lang_field']] = $lang;
 
 				$qry = $this->makeQueryForInsert($multilangTable, [$multilangData], $options);
 				if (!$qry)
@@ -399,9 +385,9 @@ class DbOld extends Module
 				$dataForCache[$tableModel->primary[0]] = $id;
 			}
 
-			if (array_key_exists($table, $this->options['linked-tables'])) {
-				$linked_table = $this->options['linked-tables'][$table]['with'];
-				$linkedTableModel = $this->getTable($linked_table);
+			if (array_key_exists($table, $this->options['linked_tables'])) {
+				$linked_table = $this->options['linked_tables'][$table];
+				$linkedTableModel = $this->getConnection()->getTable($linked_table);
 				$data['custom-data'][$linkedTableModel->primary[0]] = $id;
 
 				$qry = $this->makeQueryForInsert($linked_table, [$data['custom-data']], $options);
@@ -414,24 +400,24 @@ class DbOld extends Module
 				$id = $this->query($qry, $linked_table, 'INSERT', $options);
 
 				if ($data['custom-multilang']) {
-					$multilangTable = $linked_table . $this->model->_Multilang->tables[$table]['suffix'];
-					$multilangTableModel = $this->getTable($multilangTable);
+					$customMultilangTable = $linked_table . $multilangOptions['table_suffix'];
+					$multilangTableModel = $this->getConnection()->getTable($customMultilangTable);
 					foreach ($data['custom-multilang'] as $multilangData)
-						$this->checkDbData($multilangTable, $multilangData, $options);
+						$this->checkDbData($customMultilangTable, $multilangData, $options);
 
 					foreach ($data['custom-multilang'] as $lang => $multilangData) {
 						if (!isset($mlRowsMap[$lang]))
 							throw new \Exception('Errore nell\'inserimento custom multilang, rows map id non trovato');
 
 						$multilangData[$multilangTableModel->primary[0]] = $mlRowsMap[$lang];
-						$qry = $this->makeQueryForInsert($multilangTable, [$multilangData], $options);
+						$qry = $this->makeQueryForInsert($customMultilangTable, [$multilangData], $options);
 						if (!$qry)
 							$this->model->error('Error while generating query for multilang insert');
 
 						if ($options['debug'] and DEBUG_MODE)
 							echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
 
-						$this->query($qry, $multilangTable, 'INSERT', $options);
+						$this->query($qry, $customMultilangTable, 'INSERT', $options);
 					}
 				}
 
@@ -522,7 +508,7 @@ class DbOld extends Module
 		foreach ($rows as $data) {
 			if ($data === []) {
 				if ($defaults === null) {
-					$tableModel = $this->getTable($table);
+					$tableModel = $this->getConnection()->getTable($table);
 
 					foreach ($tableModel->columns as $c) {
 						if (!$c['real'])
@@ -584,7 +570,7 @@ class DbOld extends Module
 		if (isset($this->deferedInserts[$table]) and !$options['force'])
 			$this->model->error('There are open bulk inserts on the table ' . $table . '; can\'t update');
 
-		$tableModel = $this->getTable($table);
+		$tableModel = $this->getConnection()->getTable($table);
 		$where = $this->preliminaryWhereProcessing($tableModel, $where);
 
 		$where = $this->addTenantFilter($where, $tableModel, $options);
@@ -599,9 +585,9 @@ class DbOld extends Module
 		$data = $this->filterColumns($table, $data);
 		$this->checkDbData($table, $data['data'], $options);
 		if ($data['multilang']) {
-			$multilangTable = $this->model->_Multilang->getTableFor($table);
-			$multilangOptions = $this->model->_Multilang->getTableOptionsFor($table);
-			foreach ($data['multilang'] as $lang => $multilangData)
+			$multilangTable = \Model\Multilang\Ml::getTableFor($this->getConnection(), $table);
+			$multilangOptions = \Model\Multilang\Ml::getTableOptionsFor($this->getConnection(), $table);
+			foreach ($data['multilang'] as $multilangData)
 				$this->checkDbData($multilangTable, $multilangData, $options);
 		}
 
@@ -641,10 +627,10 @@ class DbOld extends Module
 				if (!$multilangData)
 					continue;
 
-				$ml_where_str = ' WHERE `ml`.' . $this->parseField($multilangOptions['lang']) . ' = ' . $this->parseValue($lang);
+				$ml_where_str = ' WHERE `ml`.' . $this->parseField($multilangOptions['lang_field']) . ' = ' . $this->parseValue($lang);
 				if ($where_str)
 					$ml_where_str .= ' AND (' . $where_str . ')';
-				$qry = 'UPDATE ' . $this->parseField($multilangTable) . ' AS `ml` INNER JOIN ' . $this->parseField($table) . ' AS `t` ON `t`.`' . $tableModel->primary[0] . '` = `ml`.' . $this->parseField($multilangOptions['keyfield']) . ' SET ' . $this->makeSqlString($table, $multilangData, ',', ['for_where' => false, 'main_alias' => 'ml']) . $ml_where_str;
+				$qry = 'UPDATE ' . $this->parseField($multilangTable) . ' AS `ml` INNER JOIN ' . $this->parseField($table) . ' AS `t` ON `t`.`' . $tableModel->primary[0] . '` = `ml`.' . $this->parseField($multilangOptions['parent_field']) . ' SET ' . $this->makeSqlString($table, $multilangData, ',', ['for_where' => false, 'main_alias' => 'ml']) . $ml_where_str;
 
 				if ($options['debug'] and DEBUG_MODE)
 					echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
@@ -652,17 +638,17 @@ class DbOld extends Module
 				$result = $this->query($qry, $table, 'UPDATE', $options);
 				if ($result->rowCount() === 0 and isset($where[$tableModel->primary[0]])) { // If there is no multilang row in the db, and I have the row id, I create one
 					$multilangWhere = [
-						$multilangOptions['keyfield'] => $where[$tableModel->primary[0]],
-						$multilangOptions['lang'] => $lang,
+						$multilangOptions['parent_field'] => $where[$tableModel->primary[0]],
+						$multilangOptions['lang_field'] => $lang,
 					];
 					if ($this->count($multilangTable, $multilangWhere) === 0) // I actually check that the row does not exist (rowCount can return 0 if the updated data are identical to the existing ones)
 						$this->insert($multilangTable, array_merge($multilangData, $multilangWhere));
 				}
 			}
 
-			if (array_key_exists($table, $this->options['linked-tables'])) {
-				$linked_table = $this->options['linked-tables'][$table]['with'];
-				$linkedTableModel = $this->getTable($linked_table);
+			if (array_key_exists($table, $this->options['linked_tables'])) {
+				$linked_table = $this->options['linked_tables'][$table];
+				$linkedTableModel = $this->getConnection()->getTable($linked_table);
 
 				if ($data['custom-data']) {
 					$qry = 'UPDATE ' . $this->parseField($linked_table) . ' AS `c` INNER JOIN ' . $this->parseField($table) . ' AS `t` ON `t`.`' . $tableModel->primary[0] . '` = `c`.`' . $linkedTableModel->primary[0] . '` SET ' . $this->makeSqlString($linked_table, $data['custom-data'], ',', ['for_where' => false, 'main_alias' => 'c']) . ($where_str ? ' WHERE ' . $where_str : '');
@@ -674,9 +660,10 @@ class DbOld extends Module
 				}
 
 				if ($data['custom-multilang']) {
-					$customMultilangTable = $linked_table . $this->model->_Multilang->tables[$table]['suffix'];
-					$multilangTableModel = $this->getTable($multilangTable);
-					$customMultilangModel = $this->getTable($customMultilangTable);
+					$multilangTableModel = $this->getConnection()->getTable($multilangTable);
+
+					$customMultilangTable = $linked_table . $multilangOptions['table_suffix'];
+					$customMultilangModel = $this->getConnection()->getTable($customMultilangTable);
 
 					foreach ($data['custom-multilang'] as $lang => $multilangData) {
 						if (!$multilangData)
@@ -684,10 +671,10 @@ class DbOld extends Module
 
 						$this->checkDbData($customMultilangTable, $multilangData, $options);
 
-						$ml_where_str = ' WHERE `ml`.' . $this->parseField($multilangOptions['lang']) . ' = ' . $this->parseValue($lang);
+						$ml_where_str = ' WHERE `ml`.' . $this->parseField($multilangOptions['lang_field']) . ' = ' . $this->parseValue($lang);
 						if ($where_str)
 							$ml_where_str .= ' AND (' . $where_str . ')';
-						$qry = 'UPDATE ' . $this->parseField($customMultilangTable) . ' AS `custom_ml` INNER JOIN ' . $this->parseField($multilangTable) . ' AS `ml` ON `ml`.`' . $multilangTableModel->primary[0] . '` = `custom_ml`.`' . $customMultilangModel->primary[0] . '` INNER JOIN ' . $this->parseField($table) . ' AS `t` ON `t`.`' . $tableModel->primary[0] . '` = `ml`.' . $this->parseField($multilangOptions['keyfield']) . ' SET ' . $this->makeSqlString($customMultilangTable, $multilangData, ',', ['for_where' => false, 'main_alias' => 'custom_ml']) . $ml_where_str;
+						$qry = 'UPDATE ' . $this->parseField($customMultilangTable) . ' AS `custom_ml` INNER JOIN ' . $this->parseField($multilangTable) . ' AS `ml` ON `ml`.`' . $multilangTableModel->primary[0] . '` = `custom_ml`.`' . $customMultilangModel->primary[0] . '` INNER JOIN ' . $this->parseField($table) . ' AS `t` ON `t`.`' . $tableModel->primary[0] . '` = `ml`.' . $this->parseField($multilangOptions['parent_field']) . ' SET ' . $this->makeSqlString($customMultilangTable, $multilangData, ',', ['for_where' => false, 'main_alias' => 'custom_ml']) . $ml_where_str;
 
 						if ($options['debug'] and DEBUG_MODE)
 							echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
@@ -729,13 +716,13 @@ class DbOld extends Module
 	 */
 	public function updateOrInsert(string $table, array|int|string $where, array $data, array $options = []): ?int
 	{
-		$tableModel = $this->getTable($table);
+		$tableModel = $this->getConnection()->getTable($table);
 		if (!is_array($where) and is_numeric($where))
 			$where = [$tableModel->primary[0] => $where];
 
 		$check = $this->select($table, $where, [
 			'auto_ml' => false,
-			'auto-join-linked-tables' => false,
+			'auto-join-linked_tables' => false,
 		]);
 		if ($check) {
 			$this->update($table, $where, $data, $options);
@@ -765,7 +752,7 @@ class DbOld extends Module
 		if (isset($this->deferedInserts[$table]) and !$options['force'])
 			$this->model->error('There are open bulk inserts on the table ' . $table . '; can\'t delete');
 
-		$tableModel = $this->getTable($table);
+		$tableModel = $this->getConnection()->getTable($table);
 		$where = $this->preliminaryWhereProcessing($tableModel, $where);
 
 		$where = $this->addTenantFilter($where, $tableModel, $options);
@@ -877,7 +864,7 @@ class DbOld extends Module
 		if (!is_array($opt))
 			$opt = ['field' => $opt];
 
-		$tableModel = $this->getTable($table);
+		$tableModel = $this->getConnection()->getTable($table);
 		$where = $this->preliminaryWhereProcessing($tableModel, $where);
 
 		$multilang = $this->model->isLoaded('Multilang') ? $this->model->getModule('Multilang') : false;
@@ -908,7 +895,7 @@ class DbOld extends Module
 			'stream' => true,
 			'quick-cache' => true,
 			'skip-tenant-filter' => false,
-			'auto-join-linked-tables' => true,
+			'auto-join-linked_tables' => true,
 		], $opt);
 		if ($options['multiple'] === false and !$options['limit'])
 			$options['limit'] = 1;
@@ -924,15 +911,16 @@ class DbOld extends Module
 		if (!isset($opt['ignoreCache']) and $this->canUseCache($table, $where, $options))
 			return $this->select_cache($table, $where, $options);
 
-		$isMultilang = ($multilang and $options['auto_ml'] and array_key_exists($table, $multilang->tables));
+		$mlTables = class_exists('\\Model\\Multilang\\Ml') ? \Model\Multilang\Ml::getTables($this->getConnection()) : [];
+		$isMultilang = ($multilang and $options['auto_ml'] and array_key_exists($table, $mlTables));
 
 		$sel_str = '';
 		$join_str = '';
 		if ($isMultilang) {
-			$ml = $multilang->tables[$table];
+			$ml = $mlTables[$table];
 
-			$mlTable = $table . $ml['suffix'];
-			$mlTableModel = $this->getTable($mlTable);
+			$mlTable = $table . $ml['table_suffix'];
+			$mlTableModel = $this->getConnection()->getTable($mlTable);
 
 			$mlFields = [];
 			foreach ($ml['fields'] as $f) {
@@ -944,22 +932,22 @@ class DbOld extends Module
 				'type' => 'LEFT',
 				'table' => $mlTable,
 				'alias' => 'lang',
-				'full_on' => 'lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $tableModel->primary[0] . '` AND lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->parseValue($options['lang']),
+				'full_on' => 'lang.' . $this->parseField($ml['parent_field']) . ' = t.`' . $tableModel->primary[0] . '` AND lang.' . $this->parseField($ml['lang_field']) . ' LIKE ' . $this->parseValue($options['lang']),
 				'fields' => $mlFields,
 			];
 		}
 
-		if ($options['auto-join-linked-tables']) {
+		if ($options['auto-join-linked_tables']) {
 			$customTable = null;
 			// Join per tabelle custom normali
-			if (array_key_exists($table, $this->options['linked-tables'])) {
-				$customTable = $this->options['linked-tables'][$table]['with'];
+			if (array_key_exists($table, $this->options['linked_tables'])) {
+				$customTable = $this->options['linked_tables'][$table];
 				$isCustomTableMain = true;
-			} elseif ($this->model->isLoaded('Multilang')) {
+			} elseif (class_exists('\\Model\\Multilang\\Ml')) {
 				// Join per tabelle multilingua di tabelle linked (ad esempio se faccio una query verso prova_texts deve joinarmi anche prova_custom_texts)
-				foreach ($this->model->_Multilang->tables as $mlTable => $mlTableOptions) {
-					if ($mlTable . $mlTableOptions['suffix'] === $table and array_key_exists($mlTable, $this->options['linked-tables'])) {
-						$customTable = $this->options['linked-tables'][$mlTable]['with'] . $mlTableOptions['suffix'];
+				foreach ($mlTables as $mlTable => $mlTableOptions) {
+					if ($mlTable . $mlTableOptions['table_suffix'] === $table and array_key_exists($mlTable, $this->options['linked_tables'])) {
+						$customTable = $this->options['linked_tables'][$mlTable] . $mlTableOptions['table_suffix'];
 						$isCustomTableMain = false;
 						break;
 					}
@@ -967,7 +955,7 @@ class DbOld extends Module
 			}
 
 			if ($customTable) {
-				$customTableModel = $this->getTable($customTable);
+				$customTableModel = $this->getConnection()->getTable($customTable);
 
 				$customFields = [];
 				foreach ($customTableModel->columns as $column_name => $column) {
@@ -992,10 +980,10 @@ class DbOld extends Module
 							$mlFields[] = $f;
 					}
 
-					$mlCustomTableModel = $this->getTable($customTable . $ml['suffix']);
+					$mlCustomTableModel = $this->getConnection()->getTable($customTable . $ml['table_suffix']);
 					$options['joins'][] = [
 						'type' => 'LEFT',
-						'table' => $customTable . $ml['suffix'],
+						'table' => $customTable . $ml['table_suffix'],
 						'alias' => 'custom_lang',
 						'full_on' => 'custom_lang.' . $mlCustomTableModel->primary[0] . ' = lang.`' . $mlTableModel->primary[0] . '`',
 						'fields' => $mlFields,
@@ -1245,12 +1233,13 @@ class DbOld extends Module
 	 */
 	private function multilangFallback(string $table, array $data, array $options = []): array
 	{
-		if (!$this->model->_Multilang->options['fallback'] or !isset($this->model->_Multilang->tables[$table]))
+		$mlTables = \Model\Multilang\Ml::getTables($this->getConnection());
+		if (!$this->model->_Multilang->options['fallback'] or !isset($mlTables[$table]))
 			return $data;
 
-		$mlTable = $this->model->_Multilang->tables[$table];
+		$mlTable = $mlTables[$table];
 
-		$tableModel = $this->getTable($table);
+		$tableModel = $this->getConnection()->getTable($table);
 		if (!isset($data[$tableModel->primary[0]]))
 			return $data;
 
@@ -1309,13 +1298,14 @@ class DbOld extends Module
 	 */
 	public function count(string $table, array|int|string $where = [], array $opt = []): int
 	{
-		$tableModel = $this->getTable($table);
+		$tableModel = $this->getConnection()->getTable($table);
 		$where = $this->preliminaryWhereProcessing($tableModel, $where);
 
 		$this->initDb();
 
 		$multilang = $this->model->isLoaded('Multilang') ? $this->model->getModule('Multilang') : false;
-		$auto_ml = ($multilang and array_key_exists($table, $multilang->tables)) ? true : false;
+		$mlTables = class_exists('\\Model\\Multilang\\Ml') ? \Model\Multilang\Ml::getTables($this->getConnection()) : [];
+		$auto_ml = ($multilang and array_key_exists($table, $mlTables)) ? true : false;
 		$lang = $multilang ? $multilang->lang : 'it';
 
 		$options = [
@@ -1348,12 +1338,12 @@ class DbOld extends Module
 
 		$join_str = '';
 
-		$isMultilang = ($multilang and $options['auto_ml'] and array_key_exists($table, $multilang->tables));
+		$isMultilang = ($multilang and $options['auto_ml'] and array_key_exists($table, $mlTables));
 		if ($isMultilang) {
-			$ml = $multilang->tables[$table];
+			$ml = $mlTables[$table];
 
-			$mlTable = $table . $ml['suffix'];
-			$mlTableModel = $this->getTable($mlTable);
+			$mlTable = $table . $ml['table_suffix'];
+			$mlTableModel = $this->getConnection()->getTable($mlTable);
 
 			$mlFields = [];
 			foreach ($ml['fields'] as $f) {
@@ -1365,14 +1355,14 @@ class DbOld extends Module
 				'type' => 'LEFT',
 				'table' => $mlTable,
 				'alias' => 'lang',
-				'full_on' => 'lang.' . $this->parseField($ml['keyfield']) . ' = t.`' . $tableModel->primary[0] . '` AND lang.' . $this->parseField($ml['lang']) . ' LIKE ' . $this->parseValue($options['lang']),
+				'full_on' => 'lang.' . $this->parseField($ml['parent_field']) . ' = t.`' . $tableModel->primary[0] . '` AND lang.' . $this->parseField($ml['lang_field']) . ' LIKE ' . $this->parseValue($options['lang']),
 				'fields' => $mlFields,
 			];
 		}
 
-		if (array_key_exists($table, $this->options['linked-tables'])) {
-			$customTable = $this->options['linked-tables'][$table]['with'];
-			$customTableModel = $this->getTable($customTable);
+		if (array_key_exists($table, $this->options['linked_tables'])) {
+			$customTable = $this->options['linked_tables'][$table];
+			$customTableModel = $this->getConnection()->getTable($customTable);
 
 			$customFields = [];
 			foreach ($customTableModel->columns as $column_name => $column) {
@@ -1391,8 +1381,8 @@ class DbOld extends Module
 			];
 
 			if ($isMultilang) {
-				$mlTableModel = $this->getTable($table . $ml['suffix']);
-				$mlCustomTableModel = $this->getTable($customTable . $ml['suffix']);
+				$mlTableModel = $this->getConnection()->getTable($table . $ml['table_suffix']);
+				$mlCustomTableModel = $this->getConnection()->getTable($customTable . $ml['table_suffix']);
 
 				$mlFields = [];
 				foreach ($ml['fields'] as $f) {
@@ -1402,7 +1392,7 @@ class DbOld extends Module
 
 				$options['joins'][] = [
 					'type' => 'LEFT',
-					'table' => $customTable . $ml['suffix'],
+					'table' => $customTable . $ml['table_suffix'],
 					'alias' => 'custom_lang',
 					'full_on' => 'custom_lang.' . $this->parseField($mlCustomTableModel->primary[0]) . ' = lang.`' . $mlTableModel->primary[0] . '`',
 					'fields' => $mlFields,
@@ -1503,34 +1493,36 @@ class DbOld extends Module
 	 */
 	public function getMultilangTexts(string $table, int $id = null): array
 	{
-		if (!$this->model->isLoaded('Multilang'))
+		if (!class_exists('\\Model\\Multilang\\Ml'))
 			return [];
+
+		$mlTables = \Model\Multilang\Ml::getTables($this->getConnection());
 
 		$languageVersions = [];
 		foreach ($this->model->_Multilang->langs as $l)
 			$languageVersions[$l] = [];
 
-		$tableModel = $this->getTable($table);
+		$tableModel = $this->getConnection()->getTable($table);
 		if ($tableModel) {
 			$columns = $tableModel->columns;
 
-			if (array_key_exists($table, $this->model->_Multilang->tables)) {
-				$multilangTable = $table . $this->model->_Multilang->tables[$table]['suffix'];
-				$multilangTableModel = $this->getTable($multilangTable);
+			if (array_key_exists($table, $mlTables)) {
+				$multilangTable = $table . $mlTables[$table]['table_suffix'];
+				$multilangTableModel = $this->getConnection()->getTable($multilangTable);
 				$multilangColumns = [];
-				foreach ($this->model->_Multilang->tables[$table]['fields'] as $ml) {
+				foreach ($mlTables[$table]['fields'] as $ml) {
 					$columns[$ml] = $multilangTableModel->columns[$ml];
 					$multilangColumns[] = $ml;
 				}
 
-				$langColumn = $this->model->_Multilang->tables[$table]['lang'];
+				$langColumn = $mlTables[$table]['lang_field'];
 
 				$fieldsToExtract = $multilangColumns;
 				$fieldsToExtract[] = $langColumn;
 
 				if ($id) {
 					$languageVersionsQ = $this->select_all($multilangTable, [
-						$this->model->_Multilang->tables[$table]['keyfield'] => $id,
+						$mlTables[$table]['parent_field'] => $id,
 					], [
 						'fields' => $fieldsToExtract,
 						'fallback' => false,
@@ -1550,7 +1542,7 @@ class DbOld extends Module
 					unset($r);
 				} else {
 					foreach ($languageVersions as $lang => $l_arr) {
-						foreach ($this->model->_Multilang->tables[$table]['fields'] as $f)
+						foreach ($mlTables[$table]['fields'] as $f)
 							$languageVersions[$lang][$f] = null;
 					}
 				}
@@ -1570,7 +1562,7 @@ class DbOld extends Module
 	private function normalizeTypesInSelect(string $table, array $row): array
 	{
 		try {
-			$tableModel = $this->getTable($table);
+			$tableModel = $this->getConnection()->getTable($table);
 		} catch (\Exception $e) {
 			return $row;
 		}
@@ -1671,8 +1663,8 @@ class DbOld extends Module
 			if (!isset($join['table']))
 				$this->model->error('Formato join errato');
 
-			$tableModel = $this->getTable($table);
-			$joinTableModel = $this->getTable($join['table']);
+			$tableModel = $this->getConnection()->getTable($table);
+			$joinTableModel = $this->getConnection()->getTable($join['table']);
 
 			if (!isset($join['on'], $join['join_field']) and !isset($join['full_on'])) {
 				if (isset($join['on'])) {
@@ -1771,7 +1763,7 @@ class DbOld extends Module
 		if ($options['check'] === false) // Se è stata disabilitata la verifica dalle opzioni, salto la verifica
 			return true;
 
-		$tableModel = $this->getTable($table);
+		$tableModel = $this->getConnection()->getTable($table);
 		foreach ($data as $k => $v) {
 			if (!array_key_exists($k, $tableModel->columns))
 				$this->model->error('Error while writing data.', 'Database column "' . $table . '.' . $k . '" does not exist! (either that or cache needs to be regenerated)');
@@ -1827,20 +1819,6 @@ class DbOld extends Module
 		}
 	}
 
-	/**
-	 * @param string $table
-	 * @param array $options
-	 */
-	public function linkTable(string $table, array $options = [])
-	{
-		$options = array_merge([
-			'with' => $table . '_custom',
-		], $options);
-
-		$this->options['linked-tables'][$table] = $options;
-		$this->checkLinkedTableMultilang($table);
-	}
-
 	public function getLinkedTables(string $table, array $options = []): array
 	{
 		$options = array_merge([
@@ -1853,51 +1831,24 @@ class DbOld extends Module
 		];
 
 		if ($options['linked']) {
-			foreach ($this->options['linked-tables'] as $linkedTable => $linkedTableOptions) {
+			foreach ($this->options['linked_tables'] as $linkedTable => $linkedWith) {
 				if ($linkedTable === $table)
-					$ret[] = $linkedTableOptions['with'];
-				if ($linkedTableOptions['with'] === $table)
+					$ret[] = $linkedWith;
+				if ($linkedWith === $table)
 					$ret[] = $linkedTable;
 			}
 		}
 
-		if ($options['multilang'] and $this->model->isLoaded('Multilang')) {
-			foreach ($this->model->_Multilang->tables as $mlTable => $mlOptions) {
+		if ($options['multilang'] and class_exists('\\Model\\Multilang\\Ml')) {
+			foreach (\Model\Multilang\Ml::getTables($this->getConnection()) as $mlTable => $mlOptions) {
 				if ($mlTable === $table)
-					$ret[] = $mlTable . $mlOptions['suffix'];
-				if ($mlTable . $mlOptions['suffix'] === $table)
+					$ret[] = $mlTable . $mlOptions['table_suffix'];
+				if ($mlTable . $mlOptions['table_suffix'] === $table)
 					$ret[] = $mlTable;
 			}
 		}
 
 		return array_unique($ret);
-	}
-
-	/**
-	 * @param string $table
-	 */
-	private function checkLinkedTableMultilang(string $table)
-	{
-		if (!isset($this->options['linked-tables'][$table]))
-			return;
-
-		$customTable = $this->options['linked-tables'][$table]['with'];
-		if ($this->model->isLoaded('Multilang') and array_key_exists($table, $this->model->_Multilang->tables) and !array_key_exists($customTable, $this->model->_Multilang->tables)) {
-			$this->model->_Multilang->tables[$customTable] = [
-				'keyfield' => 'parent',
-				'lang' => 'lang',
-				'suffix' => '_texts',
-				'fields' => [],
-			];
-
-			$customTableModel = $this->getTable($customTable . '_texts');
-			foreach ($customTableModel->columns as $k => $column) {
-				if ($k === $customTableModel->primary[0] or $k === 'parent' or $k === 'lang')
-					continue;
-
-				$this->model->_Multilang->tables[$customTable]['fields'][] = $k;
-			}
-		}
 	}
 
 	/**
@@ -1950,7 +1901,7 @@ class DbOld extends Module
 				return false;
 		}
 
-		if (isset($options['lang']) and $this->model->isLoaded('Multilang')) {
+		if (isset($options['lang']) and class_exists('\\Model\\Multilang\\Ml')) {
 			$lang = $this->model->getModule('Multilang')->lang;
 			if ($options['lang'] !== $lang)
 				return false;
@@ -2301,7 +2252,7 @@ class DbOld extends Module
 			'prefix' => null,
 		], $options);
 
-		$tableModel = $this->getTable($table);
+		$tableModel = $this->getConnection()->getTable($table);
 
 		$str = [];
 		foreach ($array as $k => $v) {
@@ -2460,7 +2411,7 @@ class DbOld extends Module
 	 */
 	private function filterColumns(string $table, array $data): array
 	{
-		$tableModel = $this->getTable($table);
+		$tableModel = $this->getConnection()->getTable($table);
 
 		$mainData = [];
 		$multilangData = [];
@@ -2475,54 +2426,58 @@ class DbOld extends Module
 
 				if ($c['real'])
 					$mainData[$k] = $v;
-				elseif (array_key_exists($table, $this->options['linked-tables']))
+				elseif (array_key_exists($table, $this->options['linked_tables']))
 					$customData[$k] = $v;
 			}
 		}
 
-		if ($this->model->isLoaded('Multilang') and array_key_exists($table, $this->model->_Multilang->tables)) {
-			foreach ($this->model->_Multilang->langs as $lang) {
-				$multilangData[$lang] = [];
-				$customMultilang[$lang] = [];
-			}
+		if (class_exists('\\Model\\Multilang\\Ml')) {
+			$mlTables = \Model\Multilang\Ml::getTables($this->getConnection());
 
-			$mlTableModel = $this->getTable($table . $this->model->_Multilang->tables[$table]['suffix']);
-
-			foreach ($data as $k => $v) {
-				if (!isset($mlTableModel->columns[$k]))
-					continue;
-
-				if (in_array($k, $this->model->_Multilang->tables[$table]['fields']) and $mlTableModel->columns[$k]['real']) {
-					if (array_key_exists($k, $mainData)) // A field cannot exist both in the main table and in the multilang table
-						unset($mainData[$k]);
-
-					if (!is_array($v)) {
-						$v = [
-							$this->model->_Multilang->lang => $v,
-						];
-					}
-
-					foreach ($v as $lang => $subValue) {
-						if (!in_array($lang, $this->model->_Multilang->langs))
-							continue;
-						$multilangData[$lang][$k] = $subValue;
-					}
+			if (array_key_exists($table, $mlTables)) {
+				foreach ($this->model->_Multilang->langs as $lang) {
+					$multilangData[$lang] = [];
+					$customMultilang[$lang] = [];
 				}
 
-				if (array_key_exists($table, $this->options['linked-tables']) and !$mlTableModel->columns[$k]['real']) {
-					if (array_key_exists($k, $customData)) // A field cannot exist both in the main table and in the multilang table
-						unset($customData[$k]);
+				$mlTableModel = $this->getConnection()->getTable($table . $mlTables[$table]['table_suffix']);
 
-					if (!is_array($v)) {
-						$v = [
-							$this->model->_Multilang->lang => $v,
-						];
+				foreach ($data as $k => $v) {
+					if (!isset($mlTableModel->columns[$k]))
+						continue;
+
+					if (in_array($k, $mlTables[$table]['fields']) and $mlTableModel->columns[$k]['real']) {
+						if (array_key_exists($k, $mainData)) // A field cannot exist both in the main table and in the multilang table
+							unset($mainData[$k]);
+
+						if (!is_array($v)) {
+							$v = [
+								$this->model->_Multilang->lang => $v,
+							];
+						}
+
+						foreach ($v as $lang => $subValue) {
+							if (!in_array($lang, $this->model->_Multilang->langs))
+								continue;
+							$multilangData[$lang][$k] = $subValue;
+						}
 					}
 
-					foreach ($v as $lang => $subValue) {
-						if (!in_array($lang, $this->model->_Multilang->langs))
-							continue;
-						$customMultilang[$lang][$k] = $subValue;
+					if (array_key_exists($table, $this->options['linked_tables']) and !$mlTableModel->columns[$k]['real']) {
+						if (array_key_exists($k, $customData)) // A field cannot exist both in the main table and in the multilang table
+							unset($customData[$k]);
+
+						if (!is_array($v)) {
+							$v = [
+								$this->model->_Multilang->lang => $v,
+							];
+						}
+
+						foreach ($v as $lang => $subValue) {
+							if (!in_array($lang, $this->model->_Multilang->langs))
+								continue;
+							$customMultilang[$lang][$k] = $subValue;
+						}
 					}
 				}
 			}
@@ -2539,35 +2494,11 @@ class DbOld extends Module
 	/**
 	 * @param string $name
 	 * @return Table
+	 * @deprecated
 	 */
 	public function getTable(string $name): Table
 	{
-		if (isset($this->tables[$name]))
-			return $this->tables[$name];
-
-		if (!isset($this->parser)) {
-			$this->initDb();
-			$this->parser = new Parser($this->db, $this->options['host'] . '.' . $this->options['name']);
-		}
-
-		$tableModel = $this->parser->getTable($name);
-
-		$customTableModel = null;
-		if (array_key_exists($name, $this->options['linked-tables'])) {
-			$customTableModel = $this->parser->getTable($this->options['linked-tables'][$name]['with']);
-		} elseif ($this->model->isLoaded('Multilang')) {
-			foreach ($this->model->_Multilang->tables as $mlTable => $mlTableOptions) {
-				if ($mlTable . $mlTableOptions['suffix'] === $name and array_key_exists($mlTable, $this->options['linked-tables'])) {
-					$customTableModel = $this->parser->getTable($this->options['linked-tables'][$mlTable]['with'] . $mlTableOptions['suffix']);
-					break;
-				}
-			}
-		}
-
-		if ($customTableModel)
-			$tableModel->loadColumns($customTableModel->columns, false);
-
-		return $tableModel;
+		return $this->getConnection()->getTable($name);
 	}
 
 	/**
