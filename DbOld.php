@@ -74,7 +74,8 @@ class DbOld extends Module
 			if (isset($configOptions['autoHide']))
 				$this->options['autoHide'] = array_unique(array_merge($configOptions['autoHide'], $this->options['autoHide']));
 
-			$this->options['linked_tables'] = $this->getConnection()->getConfig()['linked_tables'];
+			if (class_exists('\\Model\\LinkedTables\\LinkedTables'))
+				$this->options['linked_tables'] = \Model\LinkedTables\LinkedTables::getTables($this->getConnection());
 
 			$this->options = array_merge($configOptions, $this->options);
 
@@ -722,7 +723,6 @@ class DbOld extends Module
 
 		$check = $this->select($table, $where, [
 			'auto_ml' => false,
-			'auto-join-linked_tables' => false,
 		]);
 		if ($check) {
 			$this->update($table, $where, $data, $options);
@@ -895,7 +895,6 @@ class DbOld extends Module
 			'stream' => true,
 			'quick-cache' => true,
 			'skip-tenant-filter' => false,
-			'auto-join-linked_tables' => true,
 		], $opt);
 		if ($options['multiple'] === false and !$options['limit'])
 			$options['limit'] = 1;
@@ -937,58 +936,56 @@ class DbOld extends Module
 			];
 		}
 
-		if ($options['auto-join-linked_tables']) {
-			$customTable = null;
-			// Join per tabelle custom normali
-			if (array_key_exists($table, $this->options['linked_tables'])) {
-				$customTable = $this->options['linked_tables'][$table];
-				$isCustomTableMain = true;
-			} elseif (class_exists('\\Model\\Multilang\\Ml')) {
-				// Join per tabelle multilingua di tabelle linked (ad esempio se faccio una query verso prova_texts deve joinarmi anche prova_custom_texts)
-				foreach ($mlTables as $mlTable => $mlTableOptions) {
-					if ($mlTable . $mlTableOptions['table_suffix'] === $table and array_key_exists($mlTable, $this->options['linked_tables'])) {
-						$customTable = $this->options['linked_tables'][$mlTable] . $mlTableOptions['table_suffix'];
-						$isCustomTableMain = false;
-						break;
-					}
+		$customTable = null;
+		// Join per tabelle custom normali
+		if (array_key_exists($table, $this->options['linked_tables'])) {
+			$customTable = $this->options['linked_tables'][$table];
+			$isCustomTableMain = true;
+		} elseif (class_exists('\\Model\\Multilang\\Ml')) {
+			// Join per tabelle multilingua di tabelle linked (ad esempio se faccio una query verso prova_texts deve joinarmi anche prova_custom_texts)
+			foreach ($mlTables as $mlTable => $mlTableOptions) {
+				if ($mlTable . $mlTableOptions['table_suffix'] === $table and array_key_exists($mlTable, $this->options['linked_tables'])) {
+					$customTable = $this->options['linked_tables'][$mlTable] . $mlTableOptions['table_suffix'];
+					$isCustomTableMain = false;
+					break;
 				}
 			}
+		}
 
-			if ($customTable) {
-				$customTableModel = $this->getConnection()->getTable($customTable);
+		if ($customTable) {
+			$customTableModel = $this->getConnection()->getTable($customTable);
 
-				$customFields = [];
-				foreach ($customTableModel->columns as $column_name => $column) {
-					if ($column_name === $customTableModel->primary[0])
-						continue;
-					$customFields[] = $column_name;
+			$customFields = [];
+			foreach ($customTableModel->columns as $column_name => $column) {
+				if ($column_name === $customTableModel->primary[0])
+					continue;
+				$customFields[] = $column_name;
+			}
+
+			$options['joins'][] = [
+				'type' => 'LEFT',
+				'table' => $customTable,
+				'alias' => 'custom',
+				'on' => $tableModel->primary[0],
+				'join_field' => $customTableModel->primary[0],
+				'fields' => $customFields,
+			];
+
+			if ($isMultilang and $isCustomTableMain) {
+				$mlFields = [];
+				foreach ($ml['fields'] as $f) {
+					if (isset($mlTableModel->columns[$f]) and !$mlTableModel->columns[$f]['real'])
+						$mlFields[] = $f;
 				}
 
+				$mlCustomTableModel = $this->getConnection()->getTable($customTable . $ml['table_suffix']);
 				$options['joins'][] = [
 					'type' => 'LEFT',
-					'table' => $customTable,
-					'alias' => 'custom',
-					'on' => $tableModel->primary[0],
-					'join_field' => $customTableModel->primary[0],
-					'fields' => $customFields,
+					'table' => $customTable . $ml['table_suffix'],
+					'alias' => 'custom_lang',
+					'full_on' => 'custom_lang.' . $mlCustomTableModel->primary[0] . ' = lang.`' . $mlTableModel->primary[0] . '`',
+					'fields' => $mlFields,
 				];
-
-				if ($isMultilang and $isCustomTableMain) {
-					$mlFields = [];
-					foreach ($ml['fields'] as $f) {
-						if (isset($mlTableModel->columns[$f]) and !$mlTableModel->columns[$f]['real'])
-							$mlFields[] = $f;
-					}
-
-					$mlCustomTableModel = $this->getConnection()->getTable($customTable . $ml['table_suffix']);
-					$options['joins'][] = [
-						'type' => 'LEFT',
-						'table' => $customTable . $ml['table_suffix'],
-						'alias' => 'custom_lang',
-						'full_on' => 'custom_lang.' . $mlCustomTableModel->primary[0] . ' = lang.`' . $mlTableModel->primary[0] . '`',
-						'fields' => $mlFields,
-					];
-				}
 			}
 		}
 
