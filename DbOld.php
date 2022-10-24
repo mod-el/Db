@@ -1496,7 +1496,7 @@ class DbOld extends Module
 		$mlTables = \Model\Multilang\Ml::getTables($this->getConnection());
 
 		$languageVersions = [];
-		foreach ($this->model->_Multilang->langs as $l)
+		foreach (\Model\Multilang\Ml::getLangs() as $l)
 			$languageVersions[$l] = [];
 
 		$tableModel = $this->getConnection()->getTable($table);
@@ -2432,7 +2432,7 @@ class DbOld extends Module
 			$mlTables = \Model\Multilang\Ml::getTables($this->getConnection());
 
 			if (array_key_exists($table, $mlTables)) {
-				foreach ($this->model->_Multilang->langs as $lang) {
+				foreach (\Model\Multilang\Ml::getLangs() as $lang) {
 					$multilangData[$lang] = [];
 					$customMultilang[$lang] = [];
 				}
@@ -2454,7 +2454,7 @@ class DbOld extends Module
 						}
 
 						foreach ($v as $lang => $subValue) {
-							if (!in_array($lang, $this->model->_Multilang->langs))
+							if (!in_array($lang, \Model\Multilang\Ml::getLangs()))
 								continue;
 							$multilangData[$lang][$k] = $subValue;
 						}
@@ -2471,7 +2471,7 @@ class DbOld extends Module
 						}
 
 						foreach ($v as $lang => $subValue) {
-							if (!in_array($lang, $this->model->_Multilang->langs))
+							if (!in_array($lang, \Model\Multilang\Ml::getLangs()))
 								continue;
 							$customMultilang[$lang][$k] = $subValue;
 						}
