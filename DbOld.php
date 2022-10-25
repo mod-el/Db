@@ -867,8 +867,8 @@ class DbOld extends Module
 		$tableModel = $this->getConnection()->getTable($table);
 		$where = $this->preliminaryWhereProcessing($tableModel, $where);
 
-		$multilang = $this->model->isLoaded('Multilang') ? $this->model->getModule('Multilang') : false;
-		$lang = $multilang ? $multilang->lang : 'it';
+		$multilang = class_exists('\\Model\\Multilang\\Ml') ? \Model\Multilang\Ml::class : false;
+		$lang = $multilang ? $multilang::getLang() : 'it';
 
 		$options = array_merge([
 			'multiple' => false,
@@ -910,7 +910,7 @@ class DbOld extends Module
 		if (!isset($opt['ignoreCache']) and $this->canUseCache($table, $where, $options))
 			return $this->select_cache($table, $where, $options);
 
-		$mlTables = class_exists('\\Model\\Multilang\\Ml') ? \Model\Multilang\Ml::getTables($this->getConnection()) : [];
+		$mlTables = $multilang ? $multilang::getTables($this->getConnection()) : [];
 		$isMultilang = ($multilang and $options['auto_ml'] and array_key_exists($table, $mlTables));
 
 		$sel_str = '';
@@ -1300,10 +1300,10 @@ class DbOld extends Module
 
 		$this->initDb();
 
-		$multilang = $this->model->isLoaded('Multilang') ? $this->model->getModule('Multilang') : false;
-		$mlTables = class_exists('\\Model\\Multilang\\Ml') ? \Model\Multilang\Ml::getTables($this->getConnection()) : [];
+		$multilang = class_exists('\\Model\\Multilang\\Ml') ? \Model\Multilang\Ml::class : false;
+		$mlTables = $multilang ? $multilang::getTables($this->getConnection()) : [];
 		$auto_ml = ($multilang and array_key_exists($table, $mlTables)) ? true : false;
-		$lang = $multilang ? $multilang->lang : 'it';
+		$lang = $multilang ? $multilang::getLang() : 'it';
 
 		$options = [
 			'multiple' => true,
@@ -1899,7 +1899,7 @@ class DbOld extends Module
 		}
 
 		if (isset($options['lang']) and class_exists('\\Model\\Multilang\\Ml')) {
-			$lang = $this->model->getModule('Multilang')->lang;
+			$lang = \Model\Multilang\Ml::getLang();
 			if ($options['lang'] !== $lang)
 				return false;
 		}
@@ -2449,7 +2449,7 @@ class DbOld extends Module
 
 						if (!is_array($v)) {
 							$v = [
-								$this->model->_Multilang->lang => $v,
+								\Model\Multilang\Ml::getLang() => $v,
 							];
 						}
 
@@ -2466,7 +2466,7 @@ class DbOld extends Module
 
 						if (!is_array($v)) {
 							$v = [
-								$this->model->_Multilang->lang => $v,
+								\Model\Multilang\Ml::getLang() => $v,
 							];
 						}
 
