@@ -301,7 +301,7 @@ class DbOld extends Module
 			'replace' => false,
 			'defer' => null,
 			'debug' => $this->options['debug'],
-			'skip-tenant-filter' => false,
+			'skip_tenancy' => false,
 		], $options);
 
 		$this->trigger('insert', [
@@ -550,7 +550,7 @@ class DbOld extends Module
 			'confirm' => false,
 			'debug' => $this->options['debug'],
 			'force' => false,
-			'skip-tenant-filter' => false,
+			'skip_tenancy' => false,
 		], $options);
 
 		if (isset($this->deferedInserts[$table]) and !$options['force'])
@@ -706,100 +706,19 @@ class DbOld extends Module
 
 	/**
 	 * @param string $table
-	 * @param array|int|string $where
+	 * @param array|int $where
 	 * @param array $options
-	 * @return bool|string
+	 * @return \PDOStatement|null
 	 */
-	public function delete(string $table, array|int|string $where = [], array $options = [])
+	public function delete(string $table, array|int $where = [], array $options = []): ?\PDOStatement
 	{
-		$options = array_merge([
-			'confirm' => false,
-			'joins' => [],
-			'debug' => $this->options['debug'],
-			'force' => false,
-			'skip-tenant-filter' => false,
-			'return_query' => false,
-		], $options);
-
-		if (isset($this->deferedInserts[$table]) and !$options['force'])
-			$this->model->error('There are open bulk inserts on the table ' . $table . '; can\'t delete');
-
-		$tableModel = $this->getConnection()->getTable($table);
-		$where = $this->preliminaryWhereProcessing($tableModel, $where);
-
-		$where = $this->addTenantFilter($where, $tableModel, $options);
-
 		$this->trigger('delete', [
 			'table' => $table,
 			'where' => $where,
 			'options' => $options,
 		]);
 
-		$joins = $this->elaborateJoins($table, $options['joins']);
-
-		$join_str = '';
-		$cj = 0;
-		foreach ($joins as $join) {
-			if (!isset($join['type']))
-				$join['type'] = 'INNER';
-
-			if (isset($join['alias']))
-				$joinAlias = $join['alias'];
-			else
-				$joinAlias = 'j' . $cj;
-
-			if (isset($join['full_on'])) {
-				$join_str .= ' ' . $join['type'] . ' JOIN ' . $this->parseField($join['table']) . ' ' . $joinAlias . ' ON (' . $join['full_on'] . ')';
-			} else {
-				$join_where = array_merge([
-					$joinAlias . '.' . $this->parseField($join['join_field']) . ' = t.' . $this->parseField($join['on']),
-				], $join['where'] ?? []);
-
-				$join_str .= ' ' . $join['type'] . ' JOIN ' . $this->parseField($join['table']) . ' ' . $joinAlias . ' ON (' . $this->makeSqlString($table, $join_where, 'AND', ['joins' => $joins]) . ')';
-			}
-			$cj++;
-		}
-
-		$where_str = $this->makeSqlString($table, $where, ' AND ', ['joins' => $joins]);
-		$where_str = empty($where_str) ? '' : ' WHERE ' . $where_str;
-		if (empty($where_str) and !$options['confirm'])
-			$this->model->error('Tried to delete full table without explicit confirm');
-
-		if (in_array($table, $this->options['autoHide']))
-			$qry = 'UPDATE ' . $this->parseField($table) . ' t' . $join_str . ' SET t.zk_deleted = 1' . $where_str;
-		else
-			$qry = 'DELETE t FROM ' . $this->parseField($table) . ' t' . $join_str . $where_str;
-
-		if ($options['debug'] and DEBUG_MODE)
-			echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
-
-		if ($options['return_query'])
-			return $qry;
-
-		try {
-			$this->beginTransaction();
-
-			$this->query($qry, $table, 'DELETE', $options);
-
-			$this->changedTable($table);
-
-			$this->commit();
-		} catch (\Exception $e) {
-			$this->rollBack();
-
-			$messaggio = 'Error while deleting';
-			$messaggio2 = getErr($e);
-			if (stripos($messaggio2, 'a foreign key constraint fails') !== false) {
-				preg_match_all('/`([^`]+?)`, CONSTRAINT `(.+?)` FOREIGN KEY \(`(.+?)`\) REFERENCES `(.+?)` \(`(.+?)`\)/i', $messaggio2, $matches, PREG_SET_ORDER);
-
-				if (count($matches[0]) == 6) {
-					$fk = $matches[0];
-					$messaggio = 'Impossibile: si sta tentando di eliminare un record di "<b>' . $fk[4] . '</b>" di cui &egrave; presente un riferimento nella tabella "<b>' . $fk[1] . '</b>" (sotto la colonna: "<b>' . $fk[3] . '</b>")';
-				}
-			}
-			$this->model->error($messaggio, '<b>Error:</b> ' . $messaggio2 . '<br /><b>Query:</b> ' . $qry);
-		}
-		return true;
+		return $this->getConnection()->delete($table, $where, $options);
 	}
 
 	/**
@@ -971,7 +890,7 @@ class DbOld extends Module
 	{
 		if (
 			$this->options['tenant-filter']
-			and !$options['skip-tenant-filter']
+			and !$options['skip_tenancy']
 			and isset($tableModel->columns[$this->options['tenant-filter']['column']])
 			and (!isset($this->options['tenant-filter']['ignore']) or !in_array($tableModel->name, $this->options['tenant-filter']['ignore']))
 		) {
@@ -999,117 +918,6 @@ class DbOld extends Module
 	public function setTenantId(int $id): void
 	{
 		$this->forcedTenantId = $id;
-	}
-
-	/**
-	 * @param string $table
-	 * @param array $joins
-	 * @return array
-	 */
-	private function elaborateJoins(string $table, array $joins): array
-	{
-		/*
-		Formati possibili per un join:
-
-		//Se non si ha il modello della tabella (e relative foreign keys) è obbligatorio specificare i campi da prendere, "on" e "join_field"
-		'nome tabella'
-		'nome tabella'=>['campo1', 'campo2']
-		['table'=>'nome tabella', 'fields'=>['campo1'=>'altra_tabella_campo', 'campo2']]
-		['table'=>'nome tabella', 'on'=>'campo tabella principale', 'join_field'=>'campo tabella della join', 'fields'=>['campo1', 'campo2']]
-		*/
-
-		$return = [];
-		foreach ($joins as $k => $join) {
-			if (!is_array($join))
-				$join = ['table' => $join];
-			if (!isset($join['table']) and !isset($join['fields']) and !isset($join['on']) and !isset($join['full_on']))
-				$join = ['fields' => $join];
-			if (!is_numeric($k) and !isset($join['table']))
-				$join['table'] = $k;
-			if (!isset($join['table']))
-				$this->model->error('Formato join errato');
-
-			$tableModel = $this->getConnection()->getTable($table);
-			$joinTableModel = $this->getConnection()->getTable($join['table']);
-
-			if (!isset($join['on'], $join['join_field']) and !isset($join['full_on'])) {
-				if (isset($join['on'])) {
-					// Se sappiamo già quale colonna usare, andiamo a vedere se c'è una FK associata da cui prendere anche la colonna corrispondente nell'altra tabella
-					if (!isset($tableModel->columns[$join['on']]))
-						$this->model->error('Errore join', 'Sembra non esistere la colonna "' . $join['on'] . '" nella tabella "' . $table . '"!');
-
-					$fk_found = false;
-					foreach ($tableModel->columns[$join['on']]['foreign_keys'] as $foreign_key) {
-						if ($foreign_key['ref_table'] === $join['table']) {
-							$join['join_field'] = $foreign_key['ref_column'];
-							$fk_found = true;
-							break;
-						}
-					}
-
-					if (!$fk_found)
-						$this->model->error('Errore join', 'Nessuna FK sulla colonna "' . $join['on'] . '" che punti a "' . $join['table'] . '".');
-				} else {
-					// Altrimenti, cerchiamo di capire quale colonna usare rovistando fra le FK
-					$foreign_key = null;
-					foreach ($tableModel->columns as $column) {
-						foreach ($column['foreign_keys'] as $fk) {
-							if ($fk['ref_table'] === $join['table']) {
-								if ($foreign_key === null) {
-									$foreign_key = $fk;
-								} else { // Ambiguo: due foreign key per la stessa tabella, non posso capire quale sia quella giusta
-									$this->model->error('Errore join', 'Ci sono due foreign key nella tabella "' . $table . '" che puntano a "' . $join['table'] . '", usare la clausola "on" per specificare quale colonna utilizzare.');
-								}
-							}
-						}
-					}
-
-					if ($foreign_key !== null) {
-						$join['on'] = $foreign_key['column'];
-						$join['join_field'] = $foreign_key['ref_column'];
-					} else {
-						foreach ($joinTableModel->columns as $column) {
-							foreach ($column['foreign_keys'] as $fk) {
-								if ($fk['ref_table'] === $table) {
-									if ($foreign_key === null) {
-										$foreign_key = $fk;
-									} else { // Ambiguo: due foreign key per la stessa tabella, non posso capire quale sia quella giusta
-										$this->model->error('Errore join', 'Ci sono due foreign key nella tabella "' . $join['table'] . '" che puntano a "' . $table . '", usare le clausole "on"/"join_field" per specificare quali colonne utilizzare.');
-									}
-								}
-							}
-						}
-
-						if ($foreign_key) {
-							$join['on'] = $foreign_key['ref_column'];
-							$join['join_field'] = $foreign_key['column'];
-						}
-					}
-
-					if ($foreign_key === null)
-						$this->model->error('Errore join', 'Non trovo nessuna foreign key che leghi le tabelle "' . $table . '" e "' . $join['table'] . '". Specificare i parametri a mano.');
-				}
-			}
-
-			if (!isset($join['full_fields'])) {
-				if (!isset($join['fields'])) {
-					$join['fields'] = [];
-					foreach ($joinTableModel->columns as $k_c => $c) {
-						if (isset($tableModel->columns[$k_c]))
-							$join['fields'][] = ['field' => $k_c, 'as' => $join['table'] . '_' . $k_c];
-						else
-							$join['fields'][] = $k_c;
-					}
-				}
-
-				if (!is_array($join['fields']))
-					$join['fields'] = [$join['fields']];
-			}
-
-			$return[] = $join;
-		}
-
-		return $return;
 	}
 
 	/**
