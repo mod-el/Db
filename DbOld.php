@@ -41,7 +41,6 @@ class DbOld extends Module
 	];
 
 	protected array $tablesToCache = [];
-	protected array $cachedTables = [];
 	protected array $queryCache = [];
 
 	protected array $deferedInserts = [];
@@ -188,8 +187,6 @@ class DbOld extends Module
 				'qry' => $qry,
 			]);
 		}
-
-		$rowId = null;
 
 		$this->initDb();
 
@@ -381,11 +378,6 @@ class DbOld extends Module
 				$mlRowsMap[$lang] = $this->query($qry, $multilangTable, 'INSERT', $options);
 			}
 
-			if (isset($this->cachedTables[$table])) {
-				$dataForCache = array_merge($data['data'], count($data['multilang']) > 0 ? reset($data['multilang']) : []);
-				$dataForCache[$tableModel->primary[0]] = $id;
-			}
-
 			if (array_key_exists($table, $this->options['linked_tables'])) {
 				$linked_table = $this->options['linked_tables'][$table];
 				$linkedTableModel = $this->getConnection()->getTable($linked_table);
@@ -421,18 +413,12 @@ class DbOld extends Module
 						$this->query($qry, $customMultilangTable, 'INSERT', $options);
 					}
 				}
-
-				if (isset($this->cachedTables[$table]))
-					$dataForCache = array_merge($dataForCache, $data['custom-data'], count($data['custom-multilang']) > 0 ? reset($data['custom-multilang']) : []);
 			}
 
 			$this->trigger('inserted', [
 				'table' => $table,
 				'id' => $id,
 			]);
-
-			if (isset($this->cachedTables[$table]))
-				$this->insert_cache($table, $dataForCache);
 
 			$this->changedTable($table);
 
@@ -467,7 +453,6 @@ class DbOld extends Module
 
 				$this->query($qry, $table, 'INSERT', $options);
 
-				$this->flushTableCache($table);
 				$this->changedTable($table);
 			} else {
 				$this->trigger('empty-bulk-insert', [
@@ -685,19 +670,6 @@ class DbOld extends Module
 				}
 			}
 
-			if (isset($this->cachedTables[$table])) {
-				if ($this->canUseCache($table, $where, $options)) {
-					$this->update_cache($table, $where, array_merge(
-						$data['data'],
-						count($data['multilang']) > 0 ? reset($data['multilang']) : [],
-						$data['custom-data'],
-						count($data['custom-multilang']) > 0 ? reset($data['custom-multilang']) : []
-					), $options);
-				} else {
-					$this->flushTableCache($table);
-				}
-			}
-
 			$this->changedTable($table);
 
 			$this->commit();
@@ -809,13 +781,6 @@ class DbOld extends Module
 
 			$this->query($qry, $table, 'DELETE', $options);
 
-			if (isset($this->cachedTables[$table])) {
-				if ($this->canUseCache($table, $where, $options))
-					$this->delete_cache($table, $where, $options);
-				else
-					$this->flushTableCache($table);
-			}
-
 			$this->changedTable($table);
 
 			$this->commit();
@@ -839,645 +804,90 @@ class DbOld extends Module
 
 	/**
 	 * @param string $table
-	 * @param array|int|string $where
-	 * @param array $opt
-	 * @return iterable|string
+	 * @param array|int $where
+	 * @param array $options
+	 * @return iterable
 	 */
-	public function select_all(string $table, array|int|string $where = [], array $opt = []): iterable|string
+	public function select_all(string $table, array|int $where = [], array $options = []): iterable
 	{
-		$opt['multiple'] = true;
-		return $this->select($table, $where, $opt);
-	}
-
-	/**
-	 * @param string $table
-	 * @param array|int|string $where
-	 * @param array|string $opt
-	 * @return mixed
-	 */
-	public function select(string $table, array|int|string $where = [], array|string $opt = []): mixed
-	{
-		$this->initDb();
-
-		if (isset($this->deferedInserts[$table]))
-			$this->model->error('There are open bulk inserts on the table ' . $table . '; can\'t read');
-		if (!is_array($opt))
-			$opt = ['field' => $opt];
-
-		$tableModel = $this->getConnection()->getTable($table);
-		$where = $this->preliminaryWhereProcessing($tableModel, $where);
-
-		$multilang = class_exists('\\Model\\Multilang\\Ml') ? \Model\Multilang\Ml::class : false;
-		$lang = $multilang ? $multilang::getLang() : 'it';
-
-		$options = array_merge([
-			'multiple' => false,
-			'operator' => 'AND',
-			'distinct' => false,
-			'limit' => false,
-			'order_by' => false,
-			'group_by' => false,
-			'having' => [],
-			'auto_ml' => true,
-			'lang' => $lang,
-			'fallback' => true,
-			'joins' => [],
-			'field' => false,
-			'fields' => [],
-			'only-aggregates' => false,
-			'min' => [],
-			'max' => [],
-			'sum' => [],
-			'avg' => [],
-			'count' => [],
-			'debug' => $this->options['debug'],
-			'return_query' => false,
-			'stream' => true,
-			'quick-cache' => true,
-			'skip-tenant-filter' => false,
-		], $opt);
-		if ($options['multiple'] === false and !$options['limit'])
-			$options['limit'] = 1;
-
-		$where = $this->addTenantFilter($where, $tableModel, $options);
-
 		$this->trigger('select', [
 			'table' => $table,
 			'where' => $where,
 			'options' => $options,
 		]);
 
-		if (!isset($opt['ignoreCache']) and $this->canUseCache($table, $where, $options))
-			return $this->select_cache($table, $where, $options);
-
-		$mlTables = $multilang ? $multilang::getTables($this->getConnection()) : [];
-		$isMultilang = ($multilang and $options['auto_ml'] and array_key_exists($table, $mlTables));
-
-		$sel_str = '';
-		$join_str = '';
-		if ($isMultilang) {
-			$ml = $mlTables[$table];
-
-			$mlTable = $table . $ml['table_suffix'];
-			$mlTableModel = $this->getConnection()->getTable($mlTable);
-
-			$mlFields = [];
-			foreach ($ml['fields'] as $f) {
-				if (isset($mlTableModel->columns[$f]) and $mlTableModel->columns[$f]['real'])
-					$mlFields[] = $f;
-			}
-
-			$options['joins'][] = [
-				'type' => 'LEFT',
-				'table' => $mlTable,
-				'alias' => 'lang',
-				'full_on' => 'lang.' . $this->parseField($ml['parent_field']) . ' = t.`' . $tableModel->primary[0] . '` AND lang.' . $this->parseField($ml['lang_field']) . ' LIKE ' . $this->parseValue($options['lang']),
-				'fields' => $mlFields,
-			];
-		}
-
-		$customTable = null;
-		// Join per tabelle custom normali
-		if (array_key_exists($table, $this->options['linked_tables'])) {
-			$customTable = $this->options['linked_tables'][$table];
-			$isCustomTableMain = true;
-		} elseif (class_exists('\\Model\\Multilang\\Ml')) {
-			// Join per tabelle multilingua di tabelle linked (ad esempio se faccio una query verso prova_texts deve joinarmi anche prova_custom_texts)
-			foreach ($mlTables as $mlTable => $mlTableOptions) {
-				if ($mlTable . $mlTableOptions['table_suffix'] === $table and array_key_exists($mlTable, $this->options['linked_tables'])) {
-					$customTable = $this->options['linked_tables'][$mlTable] . $mlTableOptions['table_suffix'];
-					$isCustomTableMain = false;
-					break;
-				}
-			}
-		}
-
-		if ($customTable) {
-			$customTableModel = $this->getConnection()->getTable($customTable);
-
-			$customFields = [];
-			foreach ($customTableModel->columns as $column_name => $column) {
-				if ($column_name === $customTableModel->primary[0])
-					continue;
-				$customFields[] = $column_name;
-			}
-
-			$options['joins'][] = [
-				'type' => 'LEFT',
-				'table' => $customTable,
-				'alias' => 'custom',
-				'on' => $tableModel->primary[0],
-				'join_field' => $customTableModel->primary[0],
-				'fields' => $customFields,
-			];
-
-			if ($isMultilang and $isCustomTableMain) {
-				$mlFields = [];
-				foreach ($ml['fields'] as $f) {
-					if (isset($mlTableModel->columns[$f]) and !$mlTableModel->columns[$f]['real'])
-						$mlFields[] = $f;
-				}
-
-				$mlCustomTableModel = $this->getConnection()->getTable($customTable . $ml['table_suffix']);
-				$options['joins'][] = [
-					'type' => 'LEFT',
-					'table' => $customTable . $ml['table_suffix'],
-					'alias' => 'custom_lang',
-					'full_on' => 'custom_lang.' . $mlCustomTableModel->primary[0] . ' = lang.`' . $mlTableModel->primary[0] . '`',
-					'fields' => $mlFields,
-				];
-			}
-		}
-
-		$joins = $this->elaborateJoins($table, $options['joins']);
-
-		$cj = 0;
-		foreach ($joins as $join) {
-			if (!isset($join['type']))
-				$join['type'] = 'INNER';
-
-			if (isset($join['alias']))
-				$joinAlias = $join['alias'];
-			else
-				$joinAlias = 'j' . $cj;
-
-			if (isset($join['full_fields'])) {
-				$sel_str .= ',' . $join['full_fields'];
-			} else {
-				foreach ($join['fields'] as $nf => $f) {
-					if (!is_numeric($nf) and !is_array($f))
-						$f = ['field' => $nf, 'as' => $f];
-
-					if (is_array($f) and isset($f['field'], $f['as']))
-						$join['fields'][$nf] = $joinAlias . '.' . $this->parseField($f['field']) . ' AS ' . $this->parseField($f['as']);
-					else
-						$join['fields'][$nf] = $joinAlias . '.' . $this->parseField($f);
-				}
-				if ($join['fields'])
-					$sel_str .= ',' . implode(',', $join['fields']);
-			}
-
-			if (isset($join['full_on'])) {
-				$join_str .= ' ' . $join['type'] . ' JOIN ' . $this->parseField($join['table']) . ' ' . $joinAlias . ' ON (' . $join['full_on'] . ')';
-			} else {
-				$join_where = array_merge([
-					$joinAlias . '.' . $this->parseField($join['join_field']) . ' = t.' . $this->parseField($join['on']),
-				], $join['where'] ?? []);
-
-				$join_str .= ' ' . $join['type'] . ' JOIN ' . $this->parseField($join['table']) . ' ' . $joinAlias . ' ON (' . $this->makeSqlString($table, $join_where, 'AND', ['joins' => $joins]) . ')';
-			}
-
-			$cj++;
-		}
-
-		$make_options = [
-			'auto_ml' => $options['auto_ml'],
-			'main_alias' => 't',
-			'joins' => $joins,
-		];
-
-		$where_str = $this->makeSqlString($table, $where, ' ' . $options['operator'] . ' ', $make_options);
-		if (in_array($table, $this->options['autoHide']))
-			$where_str = empty($where_str) ? 't.zk_deleted = 0' : '(' . $where_str . ') AND t.zk_deleted = 0';
-		$where_str = empty($where_str) ? '' : ' WHERE ' . $where_str;
-
-		if ($options['distinct'])
-			$qry = 'SELECT DISTINCT ' . $this->elaborateField($options['distinct'], $make_options) . ',';
-		else
-			$qry = 'SELECT ';
-
-		$singleField = false;
-
-		$aggregateFunctions = [
-			'min',
-			'max',
-			'sum',
-			'avg',
-			'count',
-		];
-
-		$found = false;
-		foreach ($aggregateFunctions as $f) {
-			if ($options[$f]) {
-				if (is_array($options[$f])) {
-					if (!$found and !$options['only-aggregates'])
-						$qry .= 't.*' . $sel_str;
-
-					foreach ($options[$f] as $field => $alias) {
-						if ($found or !$options['only-aggregates'])
-							$qry .= ',';
-
-						if (is_numeric($field) and is_string($alias)) {
-							$field = $alias;
-							$alias = $this->elaborateField('zkaggr_' . $field, array_merge($make_options, ['add-alias' => false]));
-						}
-						$qry .= strtoupper($f) . '(' . $this->elaborateField($field, $make_options) . ') AS ' . $alias;
-					}
-
-					$found = true;
-				} else {
-					$qry .= strtoupper($f) . '(' . $this->elaborateField($options[$f], $make_options) . ')';
-					$singleField = true;
-					$found = true;
-					break;
-				}
-			}
-		}
-
-		$geometryColumns = [];
-		if (!$found) {
-			if ($options['field'] !== false) {
-				$singleField = true;
-				$qry .= $this->elaborateField($options['field'], $make_options);
-			} elseif ($options['fields']) {
-				$fields = [];
-				foreach ($options['fields'] as $f)
-					$fields[] = $this->elaborateField($f, $make_options);
-				$qry .= implode(',', $fields);
-			} else {
-				$tempColumns = [];
-				foreach ($tableModel->columns as $k => $c) {
-					if ($c['type'] === 'point') {
-						$geometryColumns[] = $k;
-						$tempColumns[] = 'AsText(' . $this->elaborateField($k, $make_options) . ') AS ' . $this->elaborateField($k);
-					} else {
-						$tempColumns[] = $this->elaborateField($k, $make_options);
-					}
-				}
-				if (count($geometryColumns) > 0)
-					$qry .= implode(',', $tempColumns);
-				else
-					$qry .= 't.*';
-				$qry .= $sel_str;
-			}
-		}
-
-		$qry .= ' FROM ' . $this->parseField($table) . ' t' . $join_str . $where_str;
-		if ($options['group_by']) {
-			$qry .= ' GROUP BY ' . ($options['group_by']);
-			if ($options['having'])
-				$qry .= ' HAVING ' . $this->makeSqlString($table, $options['having'], ' AND ', array_merge($make_options, ['add-alias' => false, 'prefix' => 'zkaggr_']));
-		}
-		if ($options['order_by']) {
-			if ($tableModel->primary and $options['order_by'] === $tableModel->primary[0])
-				$options['order_by'] = 't.' . $options['order_by'];
-			$qry .= ' ORDER BY ' . $options['order_by'];
-		}
-		if ($options['limit'])
-			$qry .= ' LIMIT ' . $options['limit'];
-
-		if ($options['return_query'])
-			return $qry;
-
-		if ($options['debug'] and DEBUG_MODE)
-			echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
-
-		if ($options['quick-cache'] and (!$options['multiple'] or !$options['stream'])) {
-			$cacheKey = md5($qry . ((string)$options['field']) . json_encode($options['max']) . json_encode($options['sum']) . ((int)$options['multiple']));
-			if (isset($this->queryCache[$table][$cacheKey])) {
-				if ($this->queryCache[$table][$cacheKey]['query'] == $qry)
-					return $this->queryCache[$table][$cacheKey]['res'];
-				else
-					unset($this->queryCache[$table][$cacheKey]);
-			}
-		}
+		$response = $this->getConnection()->selectAll($table, $where, $options);
 
 		if (!isset($this->n_tables[$table]))
 			$this->n_tables[$table] = 1;
 		else
 			$this->n_tables[$table]++;
 
-		try {
-			$q = $this->query($qry, $table, 'SELECT', $options);
-		} catch (\Exception $e) {
-			$this->model->error('Error while reading.', '<b>Errore:</b> ' . getErr($e) . '<br /><b>Query:</b> ' . $qry);
-		}
+		$this->trigger('selectResult', ($options['stream'] ?? true) ? [
+			'type' => 'stream',
+		] : [
+			'type' => 'multiple',
+			'response' => count($response) . ' rows',
+		]);
 
-		if ($singleField) {
-			$return = [$options['field'] => $q->fetchColumn()];
-			$return = $this->normalizeTypesInSelect($table, $return);
-			$return = $return[$options['field']];
-
-			$this->trigger('selectResult', [
-				'type' => 'field',
-				'response' => $return,
-			]);
-		} elseif ($options['multiple']) {
-			$results = $this->streamResults($table, $options, $q, $isMultilang);
-			if ($options['stream']) {
-				$this->trigger('selectResult', [
-					'type' => 'stream',
-				]);
-
-				return $results;
-			} else {
-				$return = [];
-				foreach ($results as $k => $r)
-					$return[$k] = $r;
-
-				$this->trigger('selectResult', [
-					'type' => 'multiple',
-					'response' => count($return) . ' rows',
-				]);
-			}
-		} else {
-			$return = $q->fetch();
-			if ($return !== false) {
-				if ($isMultilang and $options['fallback'])
-					$return = $this->multilangFallback($table, $return, $options);
-				$return = $this->normalizeTypesInSelect($table, $return);
-			}
-
-			$this->trigger('selectResult', [
-				'type' => 'row',
-				'response' => $return,
-			]);
-		}
-
-		if ($options['quick-cache'] and (!$options['multiple'] or !$options['stream'])) {
-			$this->queryCache[$table][$cacheKey] = [
-				'query' => $qry,
-				'res' => $return,
-			];
-		}
-
-		return $return;
+		return $response;
 	}
 
 	/**
-	 * Streams the results via generator, applying necessary modifiers (multilang fallback and fields normalization)
-	 *
 	 * @param string $table
+	 * @param array|int $where
 	 * @param array $options
-	 * @param \PDOStatement $q
-	 * @param bool $isMultilang
-	 * @return \Generator
+	 * @return mixed
 	 */
-	private function streamResults(string $table, array $options, \PDOStatement $q, bool $isMultilang): \Generator
+	public function select(string $table, array|int $where = [], array $options = []): mixed
 	{
-		foreach ($q as $r) {
-			if ($isMultilang)
-				$r = $this->multilangFallback($table, $r, $options);
-			yield $this->normalizeTypesInSelect($table, $r);
-		}
+		$this->trigger('select', [
+			'table' => $table,
+			'where' => $where,
+			'options' => $options,
+		]);
+
+		$response = $this->getConnection()->select($table, $where, $options);
+
+		if (!isset($this->n_tables[$table]))
+			$this->n_tables[$table] = 1;
+		else
+			$this->n_tables[$table]++;
+
+		$this->trigger('selectResult', [
+			'type' => 'row',
+			'response' => $response,
+		]);
+
+		return $response;
 	}
 
 	/**
 	 * @param string $table
-	 * @param array $data
+	 * @param array|int $where
 	 * @param array $options
-	 * @return array
-	 */
-	private function multilangFallback(string $table, array $data, array $options = []): array
-	{
-		$mlTables = \Model\Multilang\Ml::getTables($this->getConnection());
-		if (!$this->model->_Multilang->options['fallback'] or !isset($mlTables[$table]))
-			return $data;
-
-		$mlTable = $mlTables[$table];
-
-		$tableModel = $this->getConnection()->getTable($table);
-		if (!isset($data[$tableModel->primary[0]]))
-			return $data;
-
-		if ($this->checkIfValidForFallback($data, $mlTable))
-			return $data;
-
-		$where = [
-			$tableModel->primary[0] => $data[$tableModel->primary[0]],
-		];
-
-		foreach (($options['joins'] ?? []) as $idx => $join) {
-			if (isset($join['alias']) and in_array($join['alias'], ['lang', 'custom', 'custom_lang']))
-				unset($options['joins'][$idx]);
-		}
-
-		foreach ($this->model->_Multilang->options['fallback'] as $l) {
-			if ($options['lang'] === $l)
-				continue;
-
-			$row = $this->select($table, $where, array_merge($options, [
-				'lang' => $l,
-				'multiple' => false,
-				'fallback' => false,
-				'stream' => false,
-				'limit' => 1,
-			]));
-			if ($row and $this->checkIfValidForFallback($row, $mlTable))
-				return $row;
-		}
-
-		return $data;
-	}
-
-	/**
-	 * @param array $data
-	 * @param array $mlTable
-	 * @return bool
-	 */
-	private function checkIfValidForFallback(array $data, array $mlTable): bool
-	{
-		$atLeastOne = false;
-		foreach ($mlTable['fields'] as $f) {
-			if (isset($data[$f]) and !empty($data[$f])) {
-				$atLeastOne = true;
-				break;
-			}
-		}
-		return $atLeastOne;
-	}
-
-	/**
-	 * @param string $table
-	 * @param array|int|string $where
-	 * @param array $opt
 	 * @return int
 	 */
-	public function count(string $table, array|int|string $where = [], array $opt = []): int
+	public function count(string $table, array|int $where = [], array $options = []): int
 	{
-		$tableModel = $this->getConnection()->getTable($table);
-		$where = $this->preliminaryWhereProcessing($tableModel, $where);
-
-		$this->initDb();
-
-		$multilang = class_exists('\\Model\\Multilang\\Ml') ? \Model\Multilang\Ml::class : false;
-		$mlTables = $multilang ? $multilang::getTables($this->getConnection()) : [];
-		$auto_ml = ($multilang and array_key_exists($table, $mlTables)) ? true : false;
-		$lang = $multilang ? $multilang::getLang() : 'it';
-
-		$options = [
-			'multiple' => true,
-			'operator' => 'AND',
-			'distinct' => false,
-			'limit' => false,
-			'joins' => [],
-			'order_by' => false,
-			'group_by' => false,
-			'auto_ml' => $auto_ml,
-			'lang' => $lang,
-			'field' => false,
-			'debug' => $this->options['debug'],
-			'return_query' => false,
-			'skip-tenant-filter' => false,
-		];
-		$options = array_merge($options, $opt);
-
-		$where = $this->addTenantFilter($where, $tableModel, $options);
-
 		$this->trigger('count', [
 			'table' => $table,
 			'where' => $where,
 			'options' => $options,
 		]);
 
-		if (!isset($opt['ignoreCache']) and $this->canUseCache($table, $where, $options))
-			return count($this->select_cache($table, $where, $options));
-
-		$join_str = '';
-
-		$isMultilang = ($multilang and $options['auto_ml'] and array_key_exists($table, $mlTables));
-		if ($isMultilang) {
-			$ml = $mlTables[$table];
-
-			$mlTable = $table . $ml['table_suffix'];
-			$mlTableModel = $this->getConnection()->getTable($mlTable);
-
-			$mlFields = [];
-			foreach ($ml['fields'] as $f) {
-				if (isset($mlTableModel->columns[$f]) and $mlTableModel->columns[$f]['real'])
-					$mlFields[] = $f;
-			}
-
-			$options['joins'][] = [
-				'type' => 'LEFT',
-				'table' => $mlTable,
-				'alias' => 'lang',
-				'full_on' => 'lang.' . $this->parseField($ml['parent_field']) . ' = t.`' . $tableModel->primary[0] . '` AND lang.' . $this->parseField($ml['lang_field']) . ' LIKE ' . $this->parseValue($options['lang']),
-				'fields' => $mlFields,
-			];
-		}
-
-		if (array_key_exists($table, $this->options['linked_tables'])) {
-			$customTable = $this->options['linked_tables'][$table];
-			$customTableModel = $this->getConnection()->getTable($customTable);
-
-			$customFields = [];
-			foreach ($customTableModel->columns as $column_name => $column) {
-				if ($column_name === $customTableModel->primary[0])
-					continue;
-				$customFields[] = $column_name;
-			}
-
-			$options['joins'][] = [
-				'type' => 'LEFT',
-				'table' => $customTable,
-				'alias' => 'custom',
-				'on' => $tableModel->primary[0],
-				'join_field' => $customTableModel->primary[0],
-				'fields' => $customFields,
-			];
-
-			if ($isMultilang) {
-				$mlTableModel = $this->getConnection()->getTable($table . $ml['table_suffix']);
-				$mlCustomTableModel = $this->getConnection()->getTable($customTable . $ml['table_suffix']);
-
-				$mlFields = [];
-				foreach ($ml['fields'] as $f) {
-					if (isset($mlTableModel->columns[$f]) and !$mlTableModel->columns[$f]['real'])
-						$mlFields[] = $f;
-				}
-
-				$options['joins'][] = [
-					'type' => 'LEFT',
-					'table' => $customTable . $ml['table_suffix'],
-					'alias' => 'custom_lang',
-					'full_on' => 'custom_lang.' . $this->parseField($mlCustomTableModel->primary[0]) . ' = lang.`' . $mlTableModel->primary[0] . '`',
-					'fields' => $mlFields,
-				];
-			}
-		}
-
-		$joins = $this->elaborateJoins($table, $options['joins']);
-
-		$cj = 0;
-		foreach ($joins as $join) {
-			if (!isset($join['type']))
-				$join['type'] = 'INNER';
-
-			if (isset($join['alias']))
-				$joinAlias = $join['alias'];
-			else
-				$joinAlias = 'j' . $cj;
-
-			if (isset($join['full_on'])) {
-				$join_str .= ' ' . $join['type'] . ' JOIN ' . $this->parseField($join['table']) . ' ' . $joinAlias . ' ON (' . $join['full_on'] . ')';
-			} else {
-				$join_where = array_merge([
-					$joinAlias . '.' . $this->parseField($join['join_field']) . ' = t.' . $this->parseField($join['on']),
-				], $join['where'] ?? []);
-
-				$join_str .= ' ' . $join['type'] . ' JOIN ' . $this->parseField($join['table']) . ' ' . $joinAlias . ' ON (' . $this->makeSqlString($table, $join_where, 'AND', ['joins' => $joins]) . ')';
-			}
-			$cj++;
-		}
-
-		$make_options = [
-			'auto_ml' => $options['auto_ml'],
-			'main_alias' => 't',
-			'joins' => $joins,
-		];
-		$where_str = $this->makeSqlString($table, $where, ' ' . $options['operator'] . ' ', $make_options);
-
-		if (in_array($table, $this->options['autoHide']))
-			$where_str = empty($where_str) ? 'zk_deleted = 0' : '(' . $where_str . ') AND zk_deleted = 0';
-		$where_str = empty($where_str) ? '' : ' WHERE ' . $where_str;
-
-		if ($options['distinct'])
-			$qry = 'SELECT COUNT(DISTINCT ' . $this->elaborateField($options['distinct'], $make_options) . ') ';
-		elseif ($options['group_by'])
-			$qry = 'SELECT SQL_CALC_FOUND_ROWS * ';
-		else
-			$qry = 'SELECT COUNT(*) ';
-
-		$qry .= 'FROM ' . $this->parseField($table) . ' t' . $join_str . $where_str;
-		if ($options['group_by'] != false) $qry .= ' GROUP BY ' . ($options['group_by']);
-		if ($options['limit'] != false) $qry .= ' LIMIT ' . ($options['limit']);
-
-		if ($options['return_query'])
-			return $qry;
-
-		if ($options['debug'] and DEBUG_MODE)
-			echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
-
-		$cacheKey = md5($qry);
-		if (isset($this->queryCache[$table][$cacheKey])) {
-			if ($this->queryCache[$table][$cacheKey]['query'] == $qry)
-				return $this->queryCache[$table][$cacheKey]['res'];
-			else
-				unset($this->queryCache[$table][$cacheKey]);
-		}
+		$response = $this->getConnection()->count($table, $where, $options);
 
 		if (!isset($this->n_tables[$table . '-count']))
 			$this->n_tables[$table . '-count'] = 1;
 		else
 			$this->n_tables[$table . '-count']++;
 
-		try {
-			$q = $this->query($qry, $table, 'COUNT');
-			if ($options['group_by'])
-				$q = $this->query('SELECT FOUND_ROWS()', $table, 'COUNT', ['log' => false, 'query-limit' => false]);
-		} catch (\Exception $e) {
-			$this->model->error('Errore durante la lettura dei dati.', '<b>Errore:</b> ' . $e->getMessage() . '<br /><b>Query:</b> ' . $qry);
-		}
+		$this->trigger('countResult', [
+			'response' => $response,
+		]);
 
-		$return = (int)$q->fetchColumn();
-
-		$this->queryCache[$table][$cacheKey] = [
-			'query' => $qry,
-			'res' => $return,
-		];
-
-		return $return;
+		return $response;
 	}
 
 	/**
@@ -1550,47 +960,6 @@ class DbOld extends Module
 	}
 
 	/* Utilites for CRUD methods */
-
-	/**
-	 * @param string $table
-	 * @param array $row
-	 * @return array
-	 */
-	private function normalizeTypesInSelect(string $table, array $row): array
-	{
-		try {
-			$tableModel = $this->getConnection()->getTable($table);
-		} catch (\Exception $e) {
-			return $row;
-		}
-
-		$newRow = [];
-		foreach ($row as $k => $v) {
-			if (str_starts_with($k, 'zkaggr_')) // Remove aggregates prefix
-				$k = substr($k, 7);
-
-			if ($v !== null and $v !== false) {
-				if (array_key_exists($k, $tableModel->columns)) {
-					$c = $tableModel->columns[$k];
-					if (in_array($c['type'], ['double', 'float', 'decimal']))
-						$v = (float)$v;
-					if (in_array($c['type'], ['tinyint', 'smallint', 'mediumint', 'int', 'bigint', 'year']))
-						$v = (int)$v;
-					if ($c['type'] === 'point') {
-						$v = array_map(function ($v) {
-							return (float)$v;
-						}, explode(' ', substr($v, 6, -1)));
-						if (count($v) !== 2 or ($v[0] == 0 and $v[1] == 0))
-							$v = null;
-					}
-				}
-			}
-
-			$newRow[$k] = $v;
-		}
-
-		return $newRow;
-	}
 
 	/**
 	 * @param array $where
@@ -1851,262 +1220,16 @@ class DbOld extends Module
 	/**
 	 * @param string $table
 	 */
-	public function cacheTable(string $table)
-	{
-		if (!in_array($table, $this->tablesToCache))
-			$this->tablesToCache[] = $table;
-	}
-
-	/**
-	 * @param string $table
-	 */
-	public function uncacheTable(string $table)
-	{
-		$this->flushTableCache($table);
-
-		$idx = array_search($table, $this->tablesToCache);
-		if ($idx !== false)
-			unset($this->tablesToCache[$idx]);
-	}
-
-	/**
-	 * @param string $table
-	 * @param array $where
-	 * @param array $options
-	 * @return bool
-	 */
-	private function canUseCache(string $table, array $where = [], array $options = []): bool
-	{
-		if (!in_array($table, $this->tablesToCache))
-			return false;
-
-		foreach ($where as $k => $v) {
-			if (is_numeric($k) and is_string($v))
-				return false;
-			if (is_array($v))
-				return false;
-		}
-
-		if (!in_array($options['operator'] ?? 'AND', ['AND', 'OR']))
-			return false;
-
-		if (($options['order_by'] ?? false) !== false) {
-			$orderBy = str_word_count($options['order_by'], 1, '0123456789_');
-			if (count($orderBy) > 2)
-				return false;
-			if (count($orderBy) == 2 and !in_array(strtolower($orderBy[1]), ['asc', 'desc']))
-				return false;
-		}
-
-		if (isset($options['lang']) and class_exists('\\Model\\Multilang\\Ml')) {
-			$lang = \Model\Multilang\Ml::getLang();
-			if ($options['lang'] !== $lang)
-				return false;
-		}
-
-		if (!empty($options['joins']))
-			return false;
-
-		if ($options['limit'] ?? null) {
-			if (!preg_match('/^[0-9]+(,[0-9+])?$/', $options['limit']))
-				return false;
-		}
-		return true;
-	}
-
-	/**
-	 * @param string $table
-	 * @param array $where
-	 * @param array $options
-	 * @return array|\Generator|bool
-	 */
-	private function select_cache(string $table, array $where = [], array $options = [])
-	{
-		if (!isset($this->n_tables[$table . '-cache']))
-			$this->n_tables[$table . '-cache'] = 1;
-		else
-			$this->n_tables[$table . '-cache']++;
-
-		if (!isset($this->cachedTables[$table]))
-			$this->cachedTables[$table] = $this->select_all($table, [], ['stream' => false, 'ignoreCache' => true]);
-
-		$cache = $this->cachedTables[$table];
-
-		if ($options['order_by']) {
-			if (strtoupper($options['order_by']) === 'RAND()') {
-				shuffle($cache);
-			} else {
-				$orderBy = str_word_count($options['order_by'], 1, '0123456789_');
-				if (count($orderBy) === 1) $orderBy = [$orderBy[0], 'ASC'];
-				$orderBy0 = $orderBy[0];
-				$orderBy1 = strtoupper($orderBy[1]);
-
-				usort($cache, function ($a, $b) use ($orderBy0, $orderBy1) {
-					if ($a[$orderBy0] == $b[$orderBy0]) return 0;
-					if (is_numeric($a[$orderBy0]) and is_numeric($b[$orderBy0])) {
-						switch ($orderBy1) {
-							case 'DESC':
-								return $a[$orderBy0] < $b[$orderBy0] ? 1 : -1;
-								break;
-							default:
-								return $a[$orderBy0] > $b[$orderBy0] ? 1 : -1;
-								break;
-						}
-					} else {
-						$cmp = strcasecmp($a[$orderBy0], $b[$orderBy0]);
-						if ($orderBy1 == 'DESC') $cmp *= -1;
-						return $cmp;
-					}
-				});
-			}
-		}
-
-		$results = [];
-		foreach ($cache as $row) {
-			if (!$this->isCachedRowMatching($row, $where, $options['operator'] ?? 'AND'))
-				continue;
-
-			if ($options['multiple']) {
-				$results[] = $row;
-			} else {
-				if ($options['field']) return $row[$options['field']];
-				else return $row;
-			}
-		}
-
-		if ($options['multiple']) {
-			if ($options['limit']) {
-				if (is_numeric($options['limit'])) {
-					$return = array_slice($results, 0, $options['limit']);
-				} else {
-					$limit = explode(',', $options['limit']);
-					$return = array_slice($results, $limit[0], $limit[1]);
-				}
-			} else {
-				$return = $results;
-			}
-
-			if (isset($options['stream']) and $options['stream']) {
-				return $this->streamCacheResults($return);
-			} else {
-				return $return;
-			}
-		} else {
-			return false;
-		}
-	}
-
-	/**
-	 * @param string $table
-	 * @param array $where
-	 * @param array $options
-	 */
-	private function delete_cache(string $table, array $where = [], array $options = [])
-	{
-		foreach ($this->cachedTables[$table] as $idx => $row) {
-			if ($this->isCachedRowMatching($row, $where, $options['operator'] ?? 'AND'))
-				unset($this->cachedTables[$table][$idx]);
-		}
-	}
-
-	/**
-	 * @param string $table
-	 * @param array $data
-	 */
-	private function insert_cache(string $table, array $data = [])
-	{
-		$this->cachedTables[$table][] = $data;
-	}
-
-	/**
-	 * @param string $table
-	 * @param array $where
-	 * @param array $data
-	 * @param array $options
-	 */
-	private function update_cache(string $table, array $where = [], array $data = [], array $options = [])
-	{
-		foreach ($this->cachedTables[$table] as $idx => $row) {
-			if (!$this->isCachedRowMatching($row, $where, $options['operator'] ?? 'AND'))
-				continue;
-
-			$this->cachedTables[$table][$idx] = array_merge($row, $data);
-		}
-	}
-
-	/**
-	 * @param array $row
-	 * @param array $where
-	 * @param string $operator
-	 * @return bool
-	 */
-	private function isCachedRowMatching(array $row, array $where, string $operator = 'AND'): bool
-	{
-		if (empty($where)) {
-			return true;
-		} else {
-			switch ($operator) {
-				case 'AND':
-					foreach ($where as $k => $v) {
-						if ((string)$row[$k] != (string)$v)
-							return false;
-					}
-					return true;
-					break;
-				case 'OR':
-					foreach ($where as $k => $v) {
-						if ((string)$row[$k] == (string)$v)
-							return true;
-					}
-					return false;
-					break;
-				default:
-					$this->model->error('Unknown operator');
-					break;
-			}
-		}
-	}
-
-	/**
-	 * @param array $results
-	 * @return \Generator
-	 */
-	private function streamCacheResults(array $results): \Generator
-	{
-		foreach ($results as $r)
-			yield $r;
-	}
-
-	/**
-	 * @param string $table
-	 */
 	private function changedTable(string $table)
 	{
 		if (isset($this->queryCache[$table]))
 			$this->queryCache[$table] = [];
 
+		$this->getConnection()->changedTable($table);
+
 		$this->trigger('changedTable', [
 			'table' => $table,
 		]);
-	}
-
-	/**
-	 * @param string $table
-	 */
-	private function flushTableCache(string $table)
-	{
-		if (isset($this->cachedTables[$table]))
-			unset($this->cachedTables[$table]);
-	}
-
-	/**
-	 * @param string $t
-	 * @return string
-	 * @deprecated Use parseField instead
-	 */
-	public function makeSafe(string $t): string
-	{
-		return $this->parseField($t);
 	}
 
 	/**

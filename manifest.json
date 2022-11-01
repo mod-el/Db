@@ -1,7 +1,7 @@
 {
 	"name": "Db",
 	"description": "Abstraction layer for DB management",
-	"version": "4.0.0",
+	"version": "5.0.0",
 	"dependencies": {
 		"Core": ">=3.0.0"
 	},
