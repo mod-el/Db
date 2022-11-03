@@ -28,31 +28,22 @@ class Migrate
 
 		foreach ($migrations as $migration) {
 			if (!in_array($migration->module . '-' . $migration->version, $status)) {
-				try {
-					$this->db->beginTransaction();
-
-					if (!$migration->check()) {
-						try {
-							$migration->up();
-						} catch (\Exception $e) {
-							if (!$migration->ignoreErrors)
-								throw $e;
-						}
+				if (!$migration->check()) {
+					try {
+						$migration->up();
+					} catch (\Exception $e) {
+						if (!$migration->ignoreErrors)
+							throw $e;
 					}
+				}
 
-					$this->db->query('INSERT INTO `model_migrations`(`db`,`module`,`name`,`version`,`date`) VALUES(
+				$this->db->query('INSERT INTO `model_migrations`(`db`,`module`,`name`,`version`,`date`) VALUES(
 	' . $this->db->parseValue($this->db_name) . ',
 	' . $this->db->parseValue($migration->module) . ',
 	' . $this->db->parseValue($migration->name) . ',
 	' . $this->db->parseValue($migration->version) . ',
 	' . $this->db->parseValue(date('Y-m-d H:i:s')) . '
 )');
-
-					$this->db->commit();
-				} catch (\Exception $e) {
-					$this->db->rollBack();
-					throw $e;
-				}
 			}
 		}
 	}
