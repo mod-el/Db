@@ -7,7 +7,6 @@ use Model\DbParser\Table;
 class DbOld extends Module
 {
 	protected Parser $parser;
-	protected ?\PDO $db = null;
 
 	public string $name;
 	public string $unique_id;
@@ -16,14 +15,7 @@ class DbOld extends Module
 	public int $n_prepared = 0;
 	public array $n_tables = [];
 
-	protected int $c_transactions = 0;
-
 	private int $forcedTenantId;
-
-	protected array $querylimit_counter = [
-		'query' => [],
-		'table' => [],
-	];
 
 	public array $options = [
 		'db' => 'primary',
@@ -32,8 +24,6 @@ class DbOld extends Module
 		'linked_tables' => [],
 		'autoHide' => [],
 		'direct-pdo' => false,
-		'query-limit' => 100,
-		'query-limit-table' => 10000,
 		'debug' => false,
 		'use_buffered_query' => true,
 		'emulate_prepares' => false,
@@ -90,44 +80,6 @@ class DbOld extends Module
 		}
 	}
 
-	private function initDb()
-	{
-		if ($this->db !== null)
-			return;
-
-		try {
-			if ($this->options['direct-pdo']) {
-				$this->db = $this->options['direct-pdo'];
-			} else {
-				$this->db = new \PDO('mysql:host=' . $this->options['host'] . ':' . $this->options['port'] . ';dbname=' . $this->options['name'] . ';charset=utf8', $this->options['username'], $this->options['password'], [
-					\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
-					\PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
-					\PDO::ATTR_EMULATE_PREPARES => $this->options['emulate_prepares'],
-					\PDO::ATTR_STRINGIFY_FETCHES => false,
-					\PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => $this->options['use_buffered_query'],
-					\PDO::MYSQL_ATTR_LOCAL_INFILE => $this->options['local_infile'],
-				]);
-			}
-		} catch (\Exception $e) {
-			$this->model->error('Error while connecting to database: ' . $e->getMessage());
-		}
-	}
-
-	/**
-	 * @param string $name
-	 * @param array $arguments
-	 * @return mixed
-	 */
-	public function __call(string $name, array $arguments): mixed
-	{
-		$this->initDb();
-
-		if (method_exists($this->db, $name))
-			return call_user_func_array([$this->db, $name], $arguments);
-
-		return null;
-	}
-
 	/**
 	 * @return DbConnection
 	 */
@@ -138,13 +90,11 @@ class DbOld extends Module
 
 	/**
 	 * @param string $qry
-	 * @param int $type
-	 * @return string|false
+	 * @return string
 	 */
-	public function quote(string $qry, int $type = \PDO::PARAM_STR): string|false
+	public function quote(string $qry): string
 	{
-		$this->initDb();
-		return $this->db->quote($qry, $type);
+		return $this->getConnection()->parseValue($qry);
 	}
 
 	/**
@@ -158,26 +108,7 @@ class DbOld extends Module
 	{
 		$options = array_merge([
 			'log' => true,
-			'query-limit' => true,
 		], $options);
-
-		if ($options['query-limit'] and $this->options['query-limit'] > 0) {
-			if (!isset($this->querylimit_counter['query'][$qry]))
-				$this->querylimit_counter['query'][$qry] = 0;
-			$this->querylimit_counter['query'][$qry]++;
-
-			if ($this->querylimit_counter['query'][$qry] > $this->options['query-limit'])
-				$this->model->error('Query limit exceeded. - ' . $qry);
-		}
-
-		if ($options['query-limit'] and $this->options['query-limit-table'] > 0 and $table !== null) {
-			if (!isset($this->querylimit_counter['table'][$table]))
-				$this->querylimit_counter['table'][$table] = 0;
-			$this->querylimit_counter['table'][$table]++;
-
-			if ($this->querylimit_counter['table'][$table] > $this->options['query-limit-table'])
-				$this->model->error('Query limit per table ' . $table . ' exceeded. - ' . $qry);
-		}
 
 		if ($options['log']) {
 			$this->trigger('query', [
@@ -188,13 +119,11 @@ class DbOld extends Module
 			]);
 		}
 
-		$this->initDb();
-
 		$this->n_query++;
-		$res = $this->db->query($qry);
+		$res = $this->getConnection()->query($qry, $table, $type, $options);
 		$return = $res;
-		if ($res and $type === 'INSERT') {
-			$return = $this->db->lastInsertId();
+		if ($type === 'INSERT') {
+			$return = $this->getConnection()->getDb()->lastInsertId();
 			$row_id = $return;
 		} else {
 			$row_id = null;
@@ -211,29 +140,11 @@ class DbOld extends Module
 	}
 
 	/**
-	 * @param string $qry
-	 * @param array $options
-	 * @return \PDOStatement
-	 */
-	public function prepare(string $qry, array $options = []): \PDOStatement
-	{
-		$this->initDb();
-
-		$this->n_prepared++;
-		return $this->db->prepare($qry, $options);
-	}
-
-	/**
 	 * @return bool
 	 */
 	public function beginTransaction(): bool
 	{
-		$this->initDb();
-
-		$res = $this->c_transactions == 0 ? $this->db->beginTransaction() : true;
-		if ($res)
-			$this->c_transactions++;
-		return $res;
+		return $this->getConnection()->beginTransaction();
 	}
 
 	/**
@@ -241,16 +152,7 @@ class DbOld extends Module
 	 */
 	public function commit(): bool
 	{
-		if ($this->c_transactions <= 0)
-			return false;
-
-		$this->initDb();
-
-		$this->c_transactions--;
-		if ($this->c_transactions == 0 and $this->db->inTransaction())
-			return $this->db->commit();
-		else
-			return true;
+		return $this->getConnection()->commit();
 	}
 
 	/**
@@ -258,14 +160,7 @@ class DbOld extends Module
 	 */
 	public function rollBack(): bool
 	{
-		if ($this->c_transactions > 0) {
-			$this->initDb();
-
-			$this->c_transactions = 0;
-			return $this->db->inTransaction() ? $this->db->rollBack() : false;
-		}
-		$this->c_transactions = 0;
-		return false;
+		return $this->getConnection()->rollBack();
 	}
 
 	/**
@@ -274,7 +169,7 @@ class DbOld extends Module
 	 */
 	public function inTransaction(int $ignore = 0): bool
 	{
-		return ($this->c_transactions - $ignore) > 0 ? true : false;
+		return $this->getConnection()->inTransaction();
 	}
 
 	public function terminate()
@@ -283,8 +178,6 @@ class DbOld extends Module
 			if (count($options['rows']) > 0)
 				$this->bulkInsert($table);
 		}
-		if ($this->c_transactions > 0)
-			$this->rollBack();
 	}
 
 	/* CRUD methods */
@@ -576,8 +469,6 @@ class DbOld extends Module
 			foreach ($data['multilang'] as $multilangData)
 				$this->checkDbData($multilangTable, $multilangData, $options);
 		}
-
-		$this->initDb();
 
 		try {
 			$this->beginTransaction();
@@ -1102,12 +993,12 @@ class DbOld extends Module
 	}
 
 	/**
-	 * @param string $t
+	 * @param string $f
 	 * @return string
 	 */
-	public function parseField(string $t): string
+	public function parseField(string $f): string
 	{
-		return '`' . preg_replace('/[^a-zA-Z0-9_.,()!=<> -]+/', '', $t) . '`';
+		return $this->getConnection()->parseColumn($f);
 	}
 
 	/**
@@ -1116,26 +1007,7 @@ class DbOld extends Module
 	 */
 	public function parseValue(mixed $v): string
 	{
-		if ($v === null)
-			return 'NULL';
-
-		if (is_object($v)) {
-			if (get_class($v) == 'DateTime')
-				$v = $v->format('Y-m-d H:i:s');
-			else
-				$this->model->error('Only DateTime objects can be passed as Db values.');
-		}
-
-		if (is_array($v)) {
-			if (count($v) === 2 and is_numeric($v[0]) and is_numeric($v[1]))
-				return 'POINT(' . $v[0] . ',' . $v[1] . ')';
-			else
-				$this->model->error('Unknown value type');
-		}
-
-		$this->initDb();
-
-		return $this->db->quote($v);
+		return $this->getConnection()->parseValue($v);
 	}
 
 	/**
@@ -1311,23 +1183,11 @@ class DbOld extends Module
 	/**
 	 * @param string $type
 	 * @param int $n
-	 * @return bool
+	 * @return void
 	 */
-	public function setQueryLimit(string $type, int $n): bool
+	public function setQueryLimit(string $type, int $n): void
 	{
-		switch ($type) {
-			case 'query':
-				$this->options['query-limit'] = $n;
-				break;
-			case 'table':
-				$this->options['query-limit-table'] = $n;
-				break;
-			default:
-				return false;
-				break;
-		}
-
-		return true;
+		$this->getConnection()->setQueryLimit($type, $n);
 	}
 
 	/* Dealing with table models */
