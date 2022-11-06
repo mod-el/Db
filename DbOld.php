@@ -48,7 +48,7 @@ class DbOld extends Module
 		if ($this->options['direct-pdo']) {
 			$this->unique_id = 'custom';
 		} else {
-			$config = Db::getConfig();
+			$config = \Model\Config\Config::get('db');
 			if (!$config or !isset($config['databases'][$this->options['db']]))
 				throw new \Exception('Missing database configuration for ' . $this->options['db'] . ' database!');
 

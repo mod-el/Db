@@ -1,6 +1,5 @@
 <?php namespace Model\Db;
 
-use Model\Cache\Cache;
 use Model\Core\Autoloader;
 use Model\Core\Module_Config;
 
@@ -15,7 +14,7 @@ class Config extends Module_Config
 	 */
 	public function makeCache(): bool
 	{
-		$config = Db::getConfig();
+		$config = \Model\Config\Config::get('db');
 		if (!$config or !isset($config['databases']))
 			return true;
 
