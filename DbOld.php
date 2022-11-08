@@ -19,7 +19,6 @@ class DbOld extends Module
 
 	public array $options = [
 		'db' => 'primary',
-		'listCache' => [], // Deprecated
 		'linked_tables' => [],
 		'direct-pdo' => false,
 		'debug' => false,
