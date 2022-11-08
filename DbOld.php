@@ -20,9 +20,7 @@ class DbOld extends Module
 	public array $options = [
 		'db' => 'primary',
 		'listCache' => [], // Deprecated
-		'cache-tables' => [],
 		'linked_tables' => [],
-		'autoHide' => [],
 		'direct-pdo' => false,
 		'debug' => false,
 		'use_buffered_query' => true,
@@ -54,15 +52,6 @@ class DbOld extends Module
 
 			$configOptions = $config['databases'][$this->options['db']];
 
-			if (isset($configOptions['listCache']))
-				$this->options['listCache'] = array_unique(array_merge($configOptions['listCache'], $this->options['listCache']));
-			if (isset($configOptions['cache-tables']))
-				$this->options['cache-tables'] = array_unique(array_merge($configOptions['cache-tables'], $this->options['cache-tables']));
-			$this->options['cache-tables'] = array_unique(array_merge($this->options['listCache'], $this->options['cache-tables']));
-
-			if (isset($configOptions['autoHide']))
-				$this->options['autoHide'] = array_unique(array_merge($configOptions['autoHide'], $this->options['autoHide']));
-
 			if (class_exists('\\Model\\LinkedTables\\LinkedTables'))
 				$this->options['linked_tables'] = \Model\LinkedTables\LinkedTables::getTables($this->getConnection());
 
@@ -70,8 +59,6 @@ class DbOld extends Module
 
 			$this->name = $this->options['name'];
 			$this->unique_id = preg_replace('/[^A-Za-z0-9._-]/', '', $this->options['host'] . '-' . $this->options['name']);
-
-			$this->tablesToCache = $this->options['cache-tables'];
 
 			if (!isset($this->options['tenant-filter']))
 				$this->options['tenant-filter'] = null;
