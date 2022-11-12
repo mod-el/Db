@@ -27,11 +27,6 @@ class DbOld extends Module
 		'local_infile' => true,
 	];
 
-	protected array $tablesToCache = [];
-	protected array $queryCache = [];
-
-	protected array $deferedInserts = [];
-
 	/**
 	 * @param array $options
 	 */
@@ -158,14 +153,6 @@ class DbOld extends Module
 		return $this->getConnection()->inTransaction();
 	}
 
-	public function terminate()
-	{
-		foreach ($this->deferedInserts as $table => $options) {
-			if (count($options['rows']) > 0)
-				$this->bulkInsert($table);
-		}
-	}
-
 	/* CRUD methods */
 
 	/**
@@ -176,243 +163,28 @@ class DbOld extends Module
 	 */
 	public function insert(string $table, array $data = [], array $options = []): ?int
 	{
-		$options = array_merge([
-			'replace' => false,
-			'defer' => null,
-			'debug' => $this->options['debug'],
-			'skip_tenancy' => false,
-		], $options);
-
 		$this->trigger('insert', [
 			'table' => $table,
 			'data' => $data,
 			'options' => $options,
 		]);
 
-		$tableModel = $this->getConnection()->getTable($table);
-		$data = $this->addTenantFilter($data, $tableModel, $options);
-		$data = $this->filterColumns($table, $data);
-		$this->checkDbData($table, $data['data'], $options);
-		if ($data['multilang']) {
-			$multilangTable = \Model\Multilang\Ml::getTableFor($this->getConnection(), $table);
-			$multilangOptions = \Model\Multilang\Ml::getTableOptionsFor($this->getConnection(), $table);
-			foreach ($data['multilang'] as $multilangData)
-				$this->checkDbData($multilangTable, $multilangData, $options);
-		}
+		$id = $this->getConnection()->insert($table, $data, $options);
 
-		if ($options['defer'] !== null) {
-			if (array_key_exists($table, $this->options['linked_tables']))
-				$this->model->error('Cannot defer linked tables');
+		$this->trigger('inserted', [
+			'table' => $table,
+			'id' => $id,
+		]);
 
-			if ($data['multilang'])
-				$this->model->error('Cannot defer inserts with multilang fields');
-
-			if ($options['defer'] === true)
-				$options['defer'] = 0;
-			if (!is_numeric($options['defer']))
-				$this->model->error('Invalid defer value');
-			$options['defer'] = (int)$options['defer'];
-
-			if (!isset($this->deferedInserts[$table])) {
-				$this->deferedInserts[$table] = [
-					'options' => $options,
-					'rows' => [],
-				];
-			}
-
-			if ($this->deferedInserts[$table]['options'] !== $options)
-				$this->model->error('Cannot defer inserts with different options on the same table');
-
-			$this->deferedInserts[$table]['rows'][] = $data['data'];
-			if ($options['defer'] > 0 and count($this->deferedInserts[$table]['rows']) === $options['defer'])
-				$this->bulkInsert($table);
-
-			return null;
-		}
-
-		try {
-			$this->beginTransaction();
-
-			$qry = $this->makeQueryForInsert($table, [$data['data']], $options);
-			if (!$qry)
-				$this->model->error('Error while generating query for insert');
-
-			if ($options['debug'] and DEBUG_MODE)
-				echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
-
-			$id = $this->query($qry, $table, 'INSERT', $options);
-
-			$mlRowsMap = [];
-			foreach ($data['multilang'] as $lang => $multilangData) {
-				$multilangData[$multilangOptions['parent_field']] = $id;
-				$multilangData[$multilangOptions['lang_field']] = $lang;
-
-				$qry = $this->makeQueryForInsert($multilangTable, [$multilangData], $options);
-				if (!$qry)
-					$this->model->error('Error while generating query for multilang insert');
-
-				if ($options['debug'] and DEBUG_MODE)
-					echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
-
-				$mlRowsMap[$lang] = $this->query($qry, $multilangTable, 'INSERT', $options);
-			}
-
-			if (array_key_exists($table, $this->options['linked_tables'])) {
-				$linked_table = $this->options['linked_tables'][$table];
-				$linkedTableModel = $this->getConnection()->getTable($linked_table);
-				$data['custom-data'][$linkedTableModel->primary[0]] = $id;
-
-				$qry = $this->makeQueryForInsert($linked_table, [$data['custom-data']], $options);
-				if (!$qry)
-					$this->model->error('Error while generating query for custom table insert');
-
-				if ($options['debug'] and DEBUG_MODE)
-					echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
-
-				$id = $this->query($qry, $linked_table, 'INSERT', $options);
-
-				if ($data['custom-multilang']) {
-					$customMultilangTable = $linked_table . $multilangOptions['table_suffix'];
-					$multilangTableModel = $this->getConnection()->getTable($customMultilangTable);
-					foreach ($data['custom-multilang'] as $multilangData)
-						$this->checkDbData($customMultilangTable, $multilangData, $options);
-
-					foreach ($data['custom-multilang'] as $lang => $multilangData) {
-						if (!isset($mlRowsMap[$lang]))
-							throw new \Exception('Errore nell\'inserimento custom multilang, rows map id non trovato');
-
-						$multilangData[$multilangTableModel->primary[0]] = $mlRowsMap[$lang];
-						$qry = $this->makeQueryForInsert($customMultilangTable, [$multilangData], $options);
-						if (!$qry)
-							$this->model->error('Error while generating query for multilang insert');
-
-						if ($options['debug'] and DEBUG_MODE)
-							echo '<b>QUERY DEBUG:</b> ' . $qry . '<br />';
-
-						$this->query($qry, $customMultilangTable, 'INSERT', $options);
-					}
-				}
-			}
-
-			$this->trigger('inserted', [
-				'table' => $table,
-				'id' => $id,
-			]);
-
-			$this->changedTable($table);
-
-			$this->commit();
-
-			return $id;
-		} catch (\Exception $e) {
-			$this->rollBack();
-			$this->model->error('Error while inserting.', '<b>Error:</b> ' . getErr($e) . '<br /><b>Query:</b> ' . ($qry ?? 'Still undefined'));
-		}
+		return $id;
 	}
 
 	/**
 	 * @param string $table
 	 */
-	public function bulkInsert(string $table)
+	public function bulkInsert(string $table): void
 	{
-		if (!isset($this->deferedInserts[$table]))
-			return;
-
-		try {
-			$this->beginTransaction();
-
-			$options = $this->deferedInserts[$table]['options'];
-
-			$qry = $this->makeQueryForInsert($table, $this->deferedInserts[$table]['rows'], $options);
-			if ($qry) {
-				$this->trigger('bulk-insert', [
-					'table' => $table,
-					'options' => $options,
-				]);
-
-				$this->query($qry, $table, 'INSERT', $options);
-
-				$this->changedTable($table);
-			} else {
-				$this->trigger('empty-bulk-insert', [
-					'table' => $table,
-					'options' => $options,
-				]);
-			}
-
-			unset($this->deferedInserts[$table]);
-
-			$this->commit();
-		} catch (\Exception $e) {
-			$this->rollBack();
-			$this->model->error('Error while bulk inserting.', ['mex' => '<b>Error:</b> ' . getErr($e), 'details' => '<b>Query:</b> ' . ($qry ?? 'Still undefined')]);
-		}
-	}
-
-	/**
-	 * Builds a query for the insert method
-	 *
-	 * @param string $table
-	 * @param array $rows
-	 * @param array $options
-	 * @return string|null
-	 */
-	public function makeQueryForInsert(string $table, array $rows, array $options = []): ?string
-	{
-		$options = array_merge([
-			'replace' => false,
-		], $options);
-
-		$qry_init = $options['replace'] ? 'REPLACE' : 'INSERT';
-
-		$keys = [];
-		$keys_set = false;
-		$defaults = null;
-		$qry_rows = [];
-
-		foreach ($rows as $data) {
-			if ($data === []) {
-				if ($defaults === null) {
-					$tableModel = $this->getConnection()->getTable($table);
-
-					foreach ($tableModel->columns as $c) {
-						if (!$c['real'])
-							continue;
-
-						if ($c['null']) {
-							$defaults[] = 'NULL';
-						} else {
-							if ($c['key'] == 'PRI')
-								$defaults[] = 'NULL';
-							else
-								$defaults[] = '\'\'';
-						}
-					}
-				}
-				$qry_rows[] = '(' . implode(',', $defaults) . ')';
-			} else {
-				$values = [];
-				foreach ($data as $k => $v) {
-					if (!$keys_set)
-						$keys[] = $this->elaborateField($k);
-
-					$values[] = $this->parseValue($v);
-				}
-				$keys_set = true;
-
-				$qry_rows[] = '(' . implode(',', $values) . ')';
-			}
-		}
-
-		$qry = null;
-		if (count($qry_rows) > 0) {
-			if ($keys_set)
-				$qry = $qry_init . ' INTO ' . $this->parseField($table) . '(' . implode(',', $keys) . ') VALUES' . implode(',', $qry_rows);
-			else
-				$qry = $qry_init . ' INTO ' . $this->parseField($table) . ' VALUES' . implode(',', $qry_rows);
-		}
-
-		return $qry;
+		$this->getConnection()->bulkInsert($table);
 	}
 
 	/**
@@ -428,12 +200,8 @@ class DbOld extends Module
 			'version' => null,
 			'confirm' => false,
 			'debug' => $this->options['debug'],
-			'force' => false,
 			'skip_tenancy' => false,
 		], $options);
-
-		if (isset($this->deferedInserts[$table]) and !$options['force'])
-			$this->model->error('There are open bulk inserts on the table ' . $table . '; can\'t update');
 
 		$tableModel = $this->getConnection()->getTable($table);
 		$where = $this->preliminaryWhereProcessing($tableModel, $where);
@@ -907,9 +675,6 @@ class DbOld extends Module
 	 */
 	private function changedTable(string $table)
 	{
-		if (isset($this->queryCache[$table]))
-			$this->queryCache[$table] = [];
-
 		$this->getConnection()->changedTable($table);
 
 		$this->trigger('changedTable', [

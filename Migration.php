@@ -199,9 +199,9 @@ abstract class Migration
 			case 'dropForeignKey':
 				return 'ALTER TABLE `' . $options['table'] . '` DROP FOREIGN KEY `' . $options['name'] . '`';
 			case 'insert':
-				return $this->db->makeQueryForInsert($options['table'], [$options['data']], $options['options']);
+				return $this->db->getConnection()->getBuilder()->insert($options['table'], $options['data'], $options['options']);
 			case 'delete':
-				return $this->db->delete($options['table'], $options['id'], ['return_query' => true]);
+				return $this->db->getConnection()->getBuilder()->delete($options['table'], $options['id']);
 			default:
 				throw new \Exception('Unknown action');
 		}
