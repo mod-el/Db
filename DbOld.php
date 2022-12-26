@@ -17,7 +17,6 @@ class DbOld extends Module
 
 	public array $options = [
 		'db' => 'primary',
-		'linked_tables' => [],
 		'direct-pdo' => false,
 		'debug' => false,
 		'use_buffered_query' => true,
@@ -44,18 +43,10 @@ class DbOld extends Module
 
 			$configOptions = $config['databases'][$this->options['db']];
 
-			if (class_exists('\\Model\\LinkedTables\\LinkedTables'))
-				$this->options['linked_tables'] = \Model\LinkedTables\LinkedTables::getTables($this->getConnection());
-
 			$this->options = array_merge($configOptions, $this->options);
 
 			$this->name = $this->options['name'];
 			$this->unique_id = preg_replace('/[^A-Za-z0-9._-]/', '', $this->options['host'] . '-' . $this->options['name']);
-
-			if (!isset($this->options['tenant-filter']))
-				$this->options['tenant-filter'] = null;
-			if ($this->options['tenant-filter'] and (!is_array($this->options['tenant-filter']) or count($this->options['tenant-filter']) < 2 or !isset($this->options['tenant-filter']['idx'], $this->options['tenant-filter']['column'])))
-				$this->options['tenant-filter'] = null;
 		}
 	}
 
@@ -335,75 +326,6 @@ class DbOld extends Module
 		return $response;
 	}
 
-	/**
-	 * Given a multilang table and an id, returns all multilang rows for that row
-	 * If no id is provided, returns a list of fields set to null
-	 *
-	 * @param string $table
-	 * @param int|null $id
-	 * @return array
-	 */
-	public function getMultilangTexts(string $table, int $id = null): array
-	{
-		if (!class_exists('\\Model\\Multilang\\Ml'))
-			return [];
-
-		$mlTables = \Model\Multilang\Ml::getTables($this->getConnection());
-
-		$languageVersions = [];
-		foreach (\Model\Multilang\Ml::getLangs() as $l)
-			$languageVersions[$l] = [];
-
-		$tableModel = $this->getConnection()->getTable($table);
-		if ($tableModel) {
-			$columns = $tableModel->columns;
-
-			if (array_key_exists($table, $mlTables)) {
-				$multilangTable = $table . $mlTables[$table]['table_suffix'];
-				$multilangTableModel = $this->getConnection()->getTable($multilangTable);
-				$multilangColumns = [];
-				foreach ($mlTables[$table]['fields'] as $ml) {
-					$columns[$ml] = $multilangTableModel->columns[$ml];
-					$multilangColumns[] = $ml;
-				}
-
-				$langColumn = $mlTables[$table]['lang_field'];
-
-				$fieldsToExtract = $multilangColumns;
-				$fieldsToExtract[] = $langColumn;
-
-				if ($id) {
-					$languageVersionsQ = $this->select_all($multilangTable, [
-						$mlTables[$table]['parent_field'] => $id,
-					], [
-						'fields' => $fieldsToExtract,
-						'fallback' => false,
-					]);
-					foreach ($languageVersionsQ as $r) {
-						$lang = $r[$langColumn];
-						unset($r[$langColumn]);
-						$languageVersions[$lang] = $r;
-					}
-
-					foreach ($languageVersions as &$r) {
-						foreach ($multilangColumns as $k) {
-							if (!array_key_exists($k, $r))
-								$r[$k] = null;
-						}
-					}
-					unset($r);
-				} else {
-					foreach ($languageVersions as $lang => $l_arr) {
-						foreach ($mlTables[$table]['fields'] as $f)
-							$languageVersions[$lang][$f] = null;
-					}
-				}
-			}
-		}
-
-		return $languageVersions;
-	}
-
 	public function getLinkedTables(string $table, array $options = []): array
 	{
 		$options = array_merge([
@@ -415,8 +337,9 @@ class DbOld extends Module
 			$table,
 		];
 
-		if ($options['linked']) {
-			foreach ($this->options['linked_tables'] as $linkedTable => $linkedWith) {
+		if ($options['linked'] and class_exists('\\Model\\LinkedTables\\LinkedTables')) {
+			$linked_tables = \Model\LinkedTables\LinkedTables::getTables($this->getConnection());
+			foreach ($linked_tables as $linkedTable => $linkedWith) {
 				if ($linkedTable === $table)
 					$ret[] = $linkedWith;
 				if ($linkedWith === $table)
