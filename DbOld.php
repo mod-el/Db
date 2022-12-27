@@ -206,19 +206,7 @@ class DbOld extends Module
 	 */
 	public function updateOrInsert(string $table, array|int|string $where, array $data, array $options = []): ?int
 	{
-		$tableModel = $this->getConnection()->getTable($table);
-		if (!is_array($where) and is_numeric($where))
-			$where = [$tableModel->primary[0] => $where];
-
-		$check = $this->select($table, $where, [
-			'auto_ml' => false,
-		]);
-		if ($check) {
-			$this->update($table, $where, $data, $options);
-			return $check[$tableModel->primary[0]];
-		} else {
-			return $this->insert($table, array_merge($where, $data), $options);
-		}
+		return $this->getConnection()->updateOrInsert($table, $where, $data, $options);
 	}
 
 	/**
