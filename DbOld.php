@@ -76,37 +76,8 @@ class DbOld extends Module
 	 */
 	public function query(string $qry, string $table = null, string $type = null, array $options = []): \PDOStatement|int
 	{
-		$options = array_merge([
-			'log' => true,
-		], $options);
-
-		if ($options['log']) {
-			$this->trigger('query', [
-				'table' => $table,
-				'type' => $type,
-				'options' => $options,
-				'qry' => $qry,
-			]);
-		}
-
 		$this->n_query++;
-		$res = $this->getConnection()->query($qry, $table, $type, $options);
-		$return = $res;
-		if ($type === 'INSERT') {
-			$return = $this->getConnection()->getDb()->lastInsertId();
-			$row_id = $return;
-		} else {
-			$row_id = null;
-		}
-
-		if ($options['log']) {
-			$this->trigger('queryExecuted', [
-				'id' => $row_id,
-				'rows' => $res->rowCount(),
-			]);
-		}
-
-		return $return;
+		return $this->getConnection()->query($qry, $table, $type, $options);
 	}
 
 	/**
@@ -152,20 +123,7 @@ class DbOld extends Module
 	 */
 	public function insert(string $table, array $data = [], array $options = []): ?int
 	{
-		$this->trigger('insert', [
-			'table' => $table,
-			'data' => $data,
-			'options' => $options,
-		]);
-
-		$id = $this->getConnection()->insert($table, $data, $options);
-
-		$this->trigger('inserted', [
-			'table' => $table,
-			'id' => $id,
-		]);
-
-		return $id;
+		return $this->getConnection()->insert($table, $data, $options);
 	}
 
 	/**
@@ -185,15 +143,7 @@ class DbOld extends Module
 	 */
 	public function update(string $table, array|int|string $where, array $data, array $options = []): bool
 	{
-		$this->trigger('update', [
-			'table' => $table,
-			'where' => $where,
-			'data' => $data,
-			'options' => $options,
-		]);
-
 		$this->getConnection()->update($table, $where, $data, $options);
-
 		return true;
 	}
 
@@ -217,12 +167,6 @@ class DbOld extends Module
 	 */
 	public function delete(string $table, array|int $where = [], array $options = []): ?\PDOStatement
 	{
-		$this->trigger('delete', [
-			'table' => $table,
-			'where' => $where,
-			'options' => $options,
-		]);
-
 		return $this->getConnection()->delete($table, $where, $options);
 	}
 
@@ -234,25 +178,12 @@ class DbOld extends Module
 	 */
 	public function select_all(string $table, array|int $where = [], array $options = []): iterable
 	{
-		$this->trigger('select', [
-			'table' => $table,
-			'where' => $where,
-			'options' => $options,
-		]);
-
 		$response = $this->getConnection()->selectAll($table, $where, $options);
 
 		if (!isset($this->n_tables[$table]))
 			$this->n_tables[$table] = 1;
 		else
 			$this->n_tables[$table]++;
-
-		$this->trigger('selectResult', ($options['stream'] ?? true) ? [
-			'type' => 'stream',
-		] : [
-			'type' => 'multiple',
-			'response' => count($response) . ' rows',
-		]);
 
 		return $response;
 	}
@@ -265,23 +196,12 @@ class DbOld extends Module
 	 */
 	public function select(string $table, array|int $where = [], array $options = []): mixed
 	{
-		$this->trigger('select', [
-			'table' => $table,
-			'where' => $where,
-			'options' => $options,
-		]);
-
 		$response = $this->getConnection()->select($table, $where, $options);
 
 		if (!isset($this->n_tables[$table]))
 			$this->n_tables[$table] = 1;
 		else
 			$this->n_tables[$table]++;
-
-		$this->trigger('selectResult', [
-			'type' => 'row',
-			'response' => $response,
-		]);
 
 		return $response;
 	}
@@ -294,22 +214,12 @@ class DbOld extends Module
 	 */
 	public function count(string $table, array|int $where = [], array $options = []): int
 	{
-		$this->trigger('count', [
-			'table' => $table,
-			'where' => $where,
-			'options' => $options,
-		]);
-
 		$response = $this->getConnection()->count($table, $where, $options);
 
 		if (!isset($this->n_tables[$table . '-count']))
 			$this->n_tables[$table . '-count'] = 1;
 		else
 			$this->n_tables[$table . '-count']++;
-
-		$this->trigger('countResult', [
-			'response' => $response,
-		]);
 
 		return $response;
 	}
