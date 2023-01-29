@@ -11,10 +11,6 @@ class DbOld extends Module
 	public string $name;
 	public string $unique_id;
 
-	public int $n_query = 0;
-	public int $n_prepared = 0;
-	public array $n_tables = [];
-
 	public array $options = [
 		'db' => 'primary',
 		'direct-pdo' => false,
@@ -76,7 +72,6 @@ class DbOld extends Module
 	 */
 	public function query(string $qry, string $table = null, string $type = null, array $options = []): \PDOStatement|int
 	{
-		$this->n_query++;
 		return $this->getConnection()->query($qry, $table, $type, $options);
 	}
 
@@ -178,14 +173,7 @@ class DbOld extends Module
 	 */
 	public function select_all(string $table, array|int $where = [], array $options = []): iterable
 	{
-		$response = $this->getConnection()->selectAll($table, $where, $options);
-
-		if (!isset($this->n_tables[$table]))
-			$this->n_tables[$table] = 1;
-		else
-			$this->n_tables[$table]++;
-
-		return $response;
+		return $this->getConnection()->selectAll($table, $where, $options);
 	}
 
 	/**
@@ -196,14 +184,7 @@ class DbOld extends Module
 	 */
 	public function select(string $table, array|int $where = [], array $options = []): mixed
 	{
-		$response = $this->getConnection()->select($table, $where, $options);
-
-		if (!isset($this->n_tables[$table]))
-			$this->n_tables[$table] = 1;
-		else
-			$this->n_tables[$table]++;
-
-		return $response;
+		return $this->getConnection()->select($table, $where, $options);
 	}
 
 	/**
@@ -214,14 +195,7 @@ class DbOld extends Module
 	 */
 	public function count(string $table, array|int $where = [], array $options = []): int
 	{
-		$response = $this->getConnection()->count($table, $where, $options);
-
-		if (!isset($this->n_tables[$table . '-count']))
-			$this->n_tables[$table . '-count'] = 1;
-		else
-			$this->n_tables[$table . '-count']++;
-
-		return $response;
+		return $this->getConnection()->count($table, $where, $options);
 	}
 
 	public function getLinkedTables(string $table, array $options = []): array
