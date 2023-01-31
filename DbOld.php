@@ -260,21 +260,4 @@ class DbOld extends Module
 	{
 		return $this->getConnection()->getTable($name);
 	}
-
-	/**
-	 * @param string $table
-	 * @param int $id
-	 * @return int
-	 */
-	public function getVersionLock(string $table, int $id): int
-	{
-		$version = $this->select('model_version_locks', [
-			'table' => $table,
-			'row' => $id,
-		], [
-			'order_by' => 'id DESC',
-		]);
-
-		return $version ? $version['version'] : 1;
-	}
 }

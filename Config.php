@@ -5,8 +5,6 @@ use Model\Core\Module_Config;
 
 class Config extends Module_Config
 {
-	public $hasCleanUp = true;
-
 	/**
 	 * Executes migrations
 	 *
@@ -54,18 +52,6 @@ class Config extends Module_Config
 	public function getConfigData(): ?array
 	{
 		return [];
-	}
-
-	/**
-	 * Deletes all the rows in model_version_locks older than 24 hours
-	 */
-	public function cleanUp()
-	{
-		$threshold = date_create();
-		$threshold->modify('-24 hours');
-		$this->model->_Db->delete('model_version_locks', [
-			'date' => ['<=', $threshold->format('Y-m-d H:i:s')],
-		]);
 	}
 
 	public function getFileInstance(string $type, string $file): ?object
