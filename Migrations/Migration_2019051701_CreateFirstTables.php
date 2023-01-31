@@ -6,10 +6,6 @@ class Migration_2019051701_CreateFirstTables extends Migration
 {
 	public function exec()
 	{
-		$this->createTable('main_settings');
-		$this->addColumn('main_settings', 'k', ['null' => false]);
-		$this->addColumn('main_settings', 'v', ['type' => 'text']);
-
 		$this->createTable('model_version_locks');
 		$this->addColumn('model_version_locks', 'table', ['null' => false]);
 		$this->addColumn('model_version_locks', 'row', ['type' => 'int', 'null' => false]);
@@ -28,6 +24,6 @@ class Migration_2019051701_CreateFirstTables extends Migration
 
 	public function check(): bool
 	{
-		return $this->tableExists('main_settings');
+		return $this->tableExists('model_version_locks');
 	}
 }
