@@ -70,7 +70,7 @@ class DbOld extends Module
 	 * @param array $options
 	 * @return \PDOStatement|int
 	 */
-	public function query(string $qry, string $table = null, string $type = null, array $options = []): \PDOStatement|int
+	public function query(string $qry, ?string $table = null, ?string $type = null, array $options = []): \PDOStatement|int
 	{
 		return $this->getConnection()->query($qry, $table, $type, $options);
 	}
